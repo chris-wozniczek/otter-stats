@@ -39,6 +39,7 @@ final class UsageStore: ObservableObject {
     @Published private(set) var slice: UsageSlice = UsageSlice(cube: .empty, filter: UsageFilter())
     @Published private(set) var todaySlice: UsageSlice = UsageSlice(cube: .empty, filter: UsageFilter(period: .today))
     @Published private(set) var weekSlice: UsageSlice = UsageSlice(cube: .empty, filter: UsageFilter(period: .week))
+    @Published private(set) var fortnightSlice: UsageSlice = UsageSlice(cube: .empty, filter: Self.fortnightFilter())
 
     @AppStorage(SettingsKeys.dbPath) var dbPathOverride: String = ""
     @AppStorage(SettingsKeys.pricesPath) var pricesPathOverride: String = ""
@@ -74,6 +75,13 @@ final class UsageStore: ObservableObject {
         return dir.appendingPathComponent("demo-sessions.db")
     }
     static var demoPricesURL: URL { demoDBURL.deletingLastPathComponent().appendingPathComponent("demo-prices.json") }
+
+    private static func fortnightFilter(now: Int = Int(Date().timeIntervalSince1970)) -> UsageFilter {
+        var f = UsageFilter(period: .month)
+        let start = ISODay.calendar.startOfDay(for: Date(timeIntervalSince1970: TimeInterval(now)))
+        f.fromSec = Int((ISODay.calendar.date(byAdding: .day, value: -13, to: start) ?? start).timeIntervalSince1970)
+        return f
+    }
 
     var menuBarTitle: String? {
         let s = menuBarPeriod == .today ? todaySlice : weekSlice
@@ -160,6 +168,7 @@ final class UsageStore: ObservableObject {
         slice = UsageSlice(cube: cube, filter: filter)
         todaySlice = UsageSlice(cube: cube, filter: UsageFilter(period: .today))
         weekSlice = UsageSlice(cube: cube, filter: UsageFilter(period: .week))
+        fortnightSlice = UsageSlice(cube: cube, filter: Self.fortnightFilter())
     }
 
     private func watchFile() {
