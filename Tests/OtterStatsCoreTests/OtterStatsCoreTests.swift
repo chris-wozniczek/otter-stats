@@ -100,6 +100,8 @@ final class CubeTests: XCTestCase {
             let s = UsageSlice(cube: cube, filter: f, now: Self.now)
             XCTAssertTrue(s.byModel.allSatisfy { cube.models[$0.key].pricing == cls }, "\(cls)")
             XCTAssertGreaterThan(s.totals.turns, 0, "\(cls)")
+            XCTAssertTrue(s.sessions.allSatisfy { $0.totals.turns > 0 }, "\(cls): sessions without matching turns are out of scope")
+            XCTAssertLessThanOrEqual(s.prompts, all.prompts)
         }
         XCTAssertNil(PriceSnapshot(prices: ["swe-2-high": ModelPrice(free: true, input: 0, cached: 0, output: 0)]).referenceRate)
         XCTAssertEqual(PriceSnapshot(prices: ["swe-2-fast": ModelPrice(free: false, input: 1, cached: 1, output: 1)]).referenceRate?.model, "swe-2-fast", "falls back to any paid SWE model")

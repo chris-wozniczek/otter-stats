@@ -99,7 +99,7 @@ public struct UsageTotals: Hashable, Sendable {
 
     public var tokens: Int { input + output + cacheRead }
     public var costComplete: Bool { unpricedTurns == 0 }
-    public var hasFree: Bool { freeTokens > 0 }
+    public var hasFree: Bool { freeTurns > 0 }
     /// Actual cost plus the simulated value of free-tier usage.
     public var billedEquivalentUSD: Double { costUSD + equivalentUSD }
     public var avgTurnMs: Double { turns > 0 ? Double(modelMs) / Double(turns) : 0 }
@@ -258,9 +258,14 @@ public struct UsageSlice: Sendable {
             dayMap[f.day] = point
         }
 
+        // Prompts, tools and sessions have no model; under a model-level filter keep only sessions with matching turns.
+        let modelScoped = !filter.models.isEmpty || !filter.pricing.isEmpty
+        let matchedSessions = Set(sessionMap.keys)
+        func sessionInScope(_ si: Int) -> Bool { !modelScoped || matchedSessions.contains(si) }
+
         var promptTotal = 0
         var promptsBySession: [Int: Int] = [:]
-        for p in cube.prompts where dayPasses(p.day) && sessionPasses(p.session) {
+        for p in cube.prompts where dayPasses(p.day) && sessionPasses(p.session) && sessionInScope(p.session) {
             promptTotal += p.prompts
             promptsBySession[p.session, default: 0] += p.prompts
         }
@@ -268,7 +273,7 @@ public struct UsageSlice: Sendable {
         var toolMap: [String: Int] = [:]
         var toolAgentMap: [Int: Int] = [:]
         var toolCalls = 0
-        for t in cube.tools where dayPasses(t.day) && sessionPasses(t.session) && agentPasses(t.agent) {
+        for t in cube.tools where dayPasses(t.day) && sessionPasses(t.session) && agentPasses(t.agent) && sessionInScope(t.session) {
             toolMap[t.tool, default: 0] += t.calls
             toolAgentMap[t.agent, default: 0] += t.calls
             toolCalls += t.calls
@@ -299,7 +304,7 @@ public struct UsageSlice: Sendable {
         // Sessions active in the period (created or touched) even with zero turns.
         var active: [SessionSummary] = []
         for (si, s) in cube.sessions.enumerated() {
-            guard sessionPasses(si) else { continue }
+            guard sessionPasses(si), sessionInScope(si) else { continue }
             let hasFacts = sessionMap[si] != nil || promptsBySession[si] != nil
             let touched: Bool = {
                 let created = s.created ?? 0, last = s.last ?? 0
