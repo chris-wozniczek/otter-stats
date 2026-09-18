@@ -12,16 +12,16 @@ cask "otter-stats" do
     strategy :github_latest
   end
 
-  depends_on macos: ">= :sonoma"
+  depends_on macos: :sonoma
 
   app "OtterStats.app"
 
   # The app is ad-hoc signed (no Apple Developer ID yet); drop the quarantine
   # flag so Gatekeeper does not block the first launch.
-  postflight do
-    system_command "/usr/bin/xattr",
-                   args: ["-dr", "com.apple.quarantine", "#{appdir}/OtterStats.app"],
-                   must_succeed: false
+  postflight_steps do
+    run "/usr/bin/xattr",
+        args:         ["-dr", "com.apple.quarantine", "{{appdir}}/OtterStats.app"],
+        must_succeed: false
   end
 
   uninstall quit: "dev.otterswarm.otter-stats"

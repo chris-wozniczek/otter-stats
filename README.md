@@ -42,7 +42,7 @@ Requirements: macOS 14 (Sonoma) or newer. Devin CLI or Devin Desktop for real da
 
 ```sh
 brew install --cask chris-wozniczek/tap/otter-stats
-open -a "Otter Stats"
+open -a OtterStats
 ```
 
 Upgrade with `brew upgrade --cask otter-stats`; remove with
