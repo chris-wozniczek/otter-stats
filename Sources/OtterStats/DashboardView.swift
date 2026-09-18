@@ -415,20 +415,29 @@ struct TimelineSection: View {
             TimelineChart(points: slice.filledTimeline(), height: 300, metric: metric, showAxes: true)
         }
         Panel(title: "Days", subtitle: "\(slice.timeline.count) days with activity") {
-            ScrollView(.horizontal) {
-                Grid(alignment: .trailing, horizontalSpacing: 18, verticalSpacing: 6) {
-                    GridRow {
-                        Text("Day").gridColumnAlignment(.leading); Text("Turns"); Text("Tokens"); Text("Output"); Text("Model time"); Text("Est. cost")
-                    }.font(.caption.weight(.semibold)).foregroundStyle(Theme.muted)
-                    ForEach(slice.timeline.reversed()) { p in
-                        GridRow {
-                            Text(p.day).font(Theme.mono).gridColumnAlignment(.leading)
-                            Text(Fmt.int(p.totals.turns)); Text(Fmt.compact(p.totals.tokens)); Text(Fmt.compact(p.totals.output))
-                            Text(Fmt.duration(ms: p.totals.modelMs)); Text(Fmt.usd(p.totals.costUSD, complete: p.totals.costComplete))
-                        }.font(.callout.monospacedDigit())
-                    }
+            LazyVStack(alignment: .leading, spacing: 6) {
+                DayRow(cells: ["Day", "Turns", "Tokens", "Output", "Model time", "Est. cost"])
+                    .font(.caption.weight(.semibold)).foregroundStyle(Theme.muted)
+                ForEach(slice.timeline.reversed()) { p in
+                    DayRow(cells: [p.day, Fmt.int(p.totals.turns), Fmt.compact(p.totals.tokens), Fmt.compact(p.totals.output),
+                                   Fmt.duration(ms: p.totals.modelMs), Fmt.usd(p.totals.costUSD, complete: p.totals.costComplete)])
+                        .font(.callout.monospacedDigit())
                 }
             }
+        }
+    }
+}
+
+private struct DayRow: View {
+    let cells: [String]
+
+    var body: some View {
+        HStack(spacing: 18) {
+            Text(cells[0]).font(Theme.mono).frame(width: 110, alignment: .leading)
+            ForEach(1..<cells.count, id: \.self) { i in
+                Text(cells[i]).frame(width: 90, alignment: .trailing)
+            }
+            Spacer(minLength: 0)
         }
     }
 }
@@ -452,49 +461,72 @@ struct ProjectsSection: View {
 struct SessionsSection: View {
     @EnvironmentObject var store: UsageStore
     let slice: UsageSlice
+    @State private var shown = SessionsSection.pageSize
+    static let pageSize = 100
 
     var body: some View {
         Panel(title: "Sessions", subtitle: "\(slice.sessions.count) with turns in period · click to filter") {
-            ForEach(slice.sessions) { s in
-                Button { store.toggleSession(s.index) } label: {
-                    HStack(alignment: .top, spacing: 12) {
-                        RoundedRectangle(cornerRadius: 2).fill(Theme.gradient).frame(width: 3)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(s.session.title.isEmpty ? s.session.id : s.session.title).font(.callout.weight(.medium)).lineLimit(1)
-                            HStack(spacing: 8) {
-                                Text(s.project.name).foregroundStyle(Theme.cyan)
-                                Text(s.session.leadModel).font(Theme.mono)
-                                Text(Fmt.relative(s.session.last))
-                                Text(String(s.session.id.prefix(8))).font(Theme.mono)
-                            }.font(.caption).foregroundStyle(Theme.muted)
-                            HStack(spacing: 4) {
-                                ForEach(s.agents.prefix(5), id: \.key) { a in
-                                    let ag = slice.agent(a.key)
-                                    Text("\(ag.label) \(Fmt.percent(a.share))")
-                                        .font(.caption2).padding(.horizontal, 6).padding(.vertical, 2)
-                                        .foregroundStyle(Theme.color(for: ag.bucket))
-                                        .background(Theme.color(for: ag.bucket).opacity(0.12), in: Capsule())
-                                }
-                            }
-                        }
-                        Spacer()
-                        Grid(alignment: .trailing, horizontalSpacing: 14, verticalSpacing: 2) {
-                            GridRow { Text("turns"); Text("prompts"); Text("tokens"); Text("time"); Text("cost") }
-                                .font(.caption2).foregroundStyle(Theme.muted)
-                            GridRow {
-                                Text(Fmt.int(s.totals.turns)); Text(Fmt.int(s.prompts)); Text(Fmt.compact(s.totals.tokens))
-                                Text(Fmt.duration(ms: s.totals.modelMs)); Text(Fmt.usd(s.totals.costUSD, complete: s.totals.costComplete))
-                            }.font(.callout.monospacedDigit())
-                        }
-                    }
-                    .padding(10)
-                    .background(store.filter.sessions.contains(s.index) ? Theme.cyan.opacity(0.1) : Theme.glass, in: RoundedRectangle(cornerRadius: 10))
-                    .contentShape(Rectangle())
+            LazyVStack(alignment: .leading, spacing: 8) {
+                ForEach(slice.sessions.prefix(shown)) { s in
+                    SessionRow(slice: slice, s: s, selected: store.filter.sessions.contains(s.index)) { store.toggleSession(s.index) }
                 }
-                .buttonStyle(.plain)
+            }
+            if slice.sessions.count > shown {
+                Button("Show \(min(Self.pageSize, slice.sessions.count - shown)) more of \(slice.sessions.count - shown) remaining") {
+                    shown += Self.pageSize
+                }
+                .buttonStyle(.bordered)
+                .frame(maxWidth: .infinity)
             }
             if slice.sessions.isEmpty { EmptyHint() }
         }
+        .onChange(of: slice.sessions.map(\.id)) { _, _ in shown = Self.pageSize }
+    }
+}
+
+private struct SessionRow: View {
+    let slice: UsageSlice
+    let s: SessionSummary
+    let selected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(alignment: .top, spacing: 12) {
+                RoundedRectangle(cornerRadius: 2).fill(Theme.gradient).frame(width: 3)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(s.session.title.isEmpty ? s.session.id : s.session.title).font(.callout.weight(.medium)).lineLimit(1)
+                    HStack(spacing: 8) {
+                        Text(s.project.name).foregroundStyle(Theme.cyan)
+                        Text(s.session.leadModel).font(Theme.mono)
+                        Text(Fmt.relative(s.session.last))
+                        Text(String(s.session.id.prefix(8))).font(Theme.mono)
+                    }.font(.caption).foregroundStyle(Theme.muted)
+                    HStack(spacing: 4) {
+                        ForEach(s.agents.prefix(5), id: \.key) { a in
+                            let ag = slice.agent(a.key)
+                            Text("\(ag.label) \(Fmt.percent(a.share))")
+                                .font(.caption2).padding(.horizontal, 6).padding(.vertical, 2)
+                                .foregroundStyle(Theme.color(for: ag.bucket))
+                                .background(Theme.color(for: ag.bucket).opacity(0.12), in: Capsule())
+                        }
+                    }
+                }
+                Spacer()
+                Grid(alignment: .trailing, horizontalSpacing: 14, verticalSpacing: 2) {
+                    GridRow { Text("turns"); Text("prompts"); Text("tokens"); Text("time"); Text("cost") }
+                        .font(.caption2).foregroundStyle(Theme.muted)
+                    GridRow {
+                        Text(Fmt.int(s.totals.turns)); Text(Fmt.int(s.prompts)); Text(Fmt.compact(s.totals.tokens))
+                        Text(Fmt.duration(ms: s.totals.modelMs)); Text(Fmt.usd(s.totals.costUSD, complete: s.totals.costComplete))
+                    }.font(.callout.monospacedDigit())
+                }
+            }
+            .padding(10)
+            .background(selected ? Theme.cyan.opacity(0.1) : Theme.glass, in: RoundedRectangle(cornerRadius: 10))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
