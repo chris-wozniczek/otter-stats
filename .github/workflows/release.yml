@@ -1,0 +1,37 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: macos-15
+    env:
+      TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app || true
+      - run: swift test
+      - name: Build universal OtterStats.zip
+        run: VERSION="${GITHUB_REF_NAME}" Scripts/build-app.sh --zip
+      - name: Checksum
+        run: |
+          cd dist
+          shasum -a 256 OtterStats.zip | tee OtterStats.zip.sha256
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --title "Otter Stats $GITHUB_REF_NAME" --generate-notes
+          fi
+          gh release upload "$GITHUB_REF_NAME" dist/OtterStats.zip dist/OtterStats.zip.sha256 --clobber
+      - name: Bump Homebrew cask
+        if: ${{ env.TAP_GITHUB_TOKEN != '' }}
+        run: |
+          SHA="$(cut -d' ' -f1 dist/OtterStats.zip.sha256)"
+          Scripts/bump-cask.sh "${GITHUB_REF_NAME#v}" "$SHA"
