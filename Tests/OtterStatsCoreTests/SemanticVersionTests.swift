@@ -8,6 +8,12 @@ final class SemanticVersionTests: XCTestCase {
         XCTAssertNil(SemanticVersion("1.2"))
         XCTAssertNil(SemanticVersion("abc"))
         XCTAssertNil(SemanticVersion("1.2.x"))
+        XCTAssertNil(SemanticVersion("1.2.3-"))
+        XCTAssertNil(SemanticVersion("1.2.3-alpha..1"))
+        XCTAssertNil(SemanticVersion("01.2.3"))
+        XCTAssertNil(SemanticVersion("1.2.3-beta.01"))
+        XCTAssertNil(SemanticVersion("1.2.3-bęta"))
+        XCTAssertNotNil(SemanticVersion("1.2.3-rc-1.0"))
     }
 
     func testOrdering() {

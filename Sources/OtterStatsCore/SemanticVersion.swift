@@ -18,12 +18,23 @@ public struct SemanticVersion: Comparable, Hashable, CustomStringConvertible, Se
         if let plus = s.firstIndex(of: "+") { s = String(s[..<plus]) }
         var pre: [String] = []
         if let dash = s.firstIndex(of: "-") {
-            pre = s[s.index(after: dash)...].split(separator: ".").map(String.init)
+            pre = s[s.index(after: dash)...].split(separator: ".", omittingEmptySubsequences: false).map(String.init)
             s = String(s[..<dash])
+            guard pre.allSatisfy(Self.isIdentifier) else { return nil }
         }
-        let parts = s.split(separator: ".", omittingEmptySubsequences: false).map { Int($0) }
-        guard parts.count == 3, let a = parts[0], let b = parts[1], let c = parts[2] else { return nil }
+        let parts = s.split(separator: ".", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count == 3, parts.allSatisfy(Self.isNumeric),
+              let a = Int(parts[0]), let b = Int(parts[1]), let c = Int(parts[2]) else { return nil }
         self.init(major: a, minor: b, patch: c, prerelease: pre)
+    }
+
+    private static func isNumeric(_ s: String) -> Bool {
+        !s.isEmpty && s.allSatisfy(\.isASCIIDigit) && (s == "0" || !s.hasPrefix("0"))
+    }
+
+    private static func isIdentifier(_ s: String) -> Bool {
+        guard !s.isEmpty, s.allSatisfy({ $0.isASCIIDigit || $0 == "-" || ($0.isASCII && $0.isLetter) }) else { return false }
+        return s.contains { !$0.isASCIIDigit } || isNumeric(s)
     }
 
     public var description: String {
@@ -51,4 +62,8 @@ public struct SemanticVersion: Comparable, Hashable, CustomStringConvertible, Se
         }
         return lhs.prerelease.count < rhs.prerelease.count
     }
+}
+
+private extension Character {
+    var isASCIIDigit: Bool { isASCII && isNumber }
 }
