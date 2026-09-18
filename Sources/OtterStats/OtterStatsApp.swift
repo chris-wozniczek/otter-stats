@@ -4,10 +4,11 @@ import AppKit
 struct OtterStatsApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var store = UsageStore()
+    @StateObject private var updates = UpdateChecker()
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarView().environmentObject(store)
+            MenuBarView().environmentObject(store).environmentObject(updates)
         } label: {
             HStack(spacing: 4) {
                 Image(nsImage: MenuBarGlyph.image())
@@ -15,7 +16,7 @@ struct OtterStatsApp: App {
                     Text(title).font(.system(size: 12, weight: .medium).monospacedDigit())
                 }
             }
-            .task { store.start() }
+            .task { store.start(); updates.start() }
         }
         .menuBarExtraStyle(.window)
 
@@ -32,7 +33,7 @@ struct OtterStatsApp: App {
         }
 
         Settings {
-            SettingsView().environmentObject(store)
+            SettingsView().environmentObject(store).environmentObject(updates)
         }
     }
 }
