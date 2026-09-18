@@ -17,6 +17,7 @@ struct SettingsView: View {
                 Picker("Menu bar period", selection: $store.menuBarPeriodRaw) {
                     Text("Today").tag(Period.today.rawValue)
                     Text("Last 7 days").tag(Period.week.rawValue)
+                    Text("Last 30 days").tag(Period.month.rawValue)
                 }
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, on in

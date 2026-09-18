@@ -23,6 +23,8 @@ enum SettingsKeys {
     static let menuBarMetric = "menuBarMetric"
     static let menuBarPeriod = "menuBarPeriod"
     static let popoverPeriod = "popoverPeriod"
+    static let customStart = "customRangeStart"
+    static let customEnd = "customRangeEnd"
     static let demoMode = "demoMode"
     static let skippedUpdate = "skippedUpdateVersion"
     static let lastUpdateCheck = "lastUpdateCheck"
@@ -41,6 +43,7 @@ final class UsageStore: ObservableObject {
     @Published private(set) var slice: UsageSlice = UsageSlice(cube: .empty, filter: UsageFilter())
     @Published private(set) var todaySlice: UsageSlice = UsageSlice(cube: .empty, filter: UsageFilter(period: .today))
     @Published private(set) var weekSlice: UsageSlice = UsageSlice(cube: .empty, filter: UsageFilter(period: .week))
+    @Published private(set) var monthSlice: UsageSlice = UsageSlice(cube: .empty, filter: UsageFilter(period: .month))
     @Published private(set) var fortnightSlice: UsageSlice = UsageSlice(cube: .empty, filter: UsageStore.fortnightFilter())
 
     @AppStorage(SettingsKeys.dbPath) var dbPathOverride: String = ""
@@ -49,6 +52,8 @@ final class UsageStore: ObservableObject {
     @AppStorage(SettingsKeys.menuBarMetric) var menuBarMetricRaw: String = MenuBarMetric.cost.rawValue
     @AppStorage(SettingsKeys.menuBarPeriod) var menuBarPeriodRaw: String = Period.today.rawValue
     @AppStorage(SettingsKeys.demoMode) var demoMode: Bool = false
+    @AppStorage(SettingsKeys.customStart) private var customStartRaw: Double = 0
+    @AppStorage(SettingsKeys.customEnd) private var customEndRaw: Double = 0
 
     private var timer: Timer?
     private var fileSource: DispatchSourceFileSystemObject?
@@ -85,8 +90,47 @@ final class UsageStore: ObservableObject {
         return f
     }
 
+    /// Custom dashboard range (inclusive days). Defaults to the last 30 days.
+    var customStart: Date {
+        get { customStartRaw > 0 ? Date(timeIntervalSince1970: customStartRaw) : ISODay.calendar.date(byAdding: .day, value: -29, to: ISODay.calendar.startOfDay(for: Date())) ?? Date() }
+        set { customStartRaw = newValue.timeIntervalSince1970; if filter.period == .custom { applyCustomRange() } }
+    }
+
+    var customEnd: Date {
+        get { customEndRaw > 0 ? Date(timeIntervalSince1970: customEndRaw) : ISODay.calendar.startOfDay(for: Date()) }
+        set { customEndRaw = newValue.timeIntervalSince1970; if filter.period == .custom { applyCustomRange() } }
+    }
+
+    /// Switches the dashboard period; presets drop any explicit range, `.custom` installs the saved one.
+    func setPeriod(_ period: Period) {
+        if period == .custom {
+            applyCustomRange()
+        } else {
+            var f = filter
+            f.period = period
+            f.fromSec = nil
+            f.toSec = nil
+            filter = f
+        }
+    }
+
+    private func applyCustomRange() {
+        var f = UsageFilter.custom(from: customStart, to: customEnd)
+        f.projects = filter.projects; f.sessions = filter.sessions; f.agents = filter.agents
+        f.buckets = filter.buckets; f.models = filter.models; f.query = filter.query
+        filter = f
+    }
+
+    func quickSlice(for period: Period) -> UsageSlice {
+        switch period {
+        case .today: return todaySlice
+        case .month: return monthSlice
+        default: return weekSlice
+        }
+    }
+
     var menuBarTitle: String? {
-        let s = menuBarPeriod == .today ? todaySlice : weekSlice
+        let s = quickSlice(for: menuBarPeriod)
         switch menuBarMetric {
         case .none: return nil
         case .cost: return Fmt.usd(s.totals.costUSD, complete: s.totals.costComplete)
@@ -170,6 +214,7 @@ final class UsageStore: ObservableObject {
         slice = UsageSlice(cube: cube, filter: filter)
         todaySlice = UsageSlice(cube: cube, filter: UsageFilter(period: .today))
         weekSlice = UsageSlice(cube: cube, filter: UsageFilter(period: .week))
+        monthSlice = UsageSlice(cube: cube, filter: UsageFilter(period: .month))
         fortnightSlice = UsageSlice(cube: cube, filter: UsageStore.fortnightFilter())
     }
 

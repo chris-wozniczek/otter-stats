@@ -89,6 +89,33 @@ final class CubeTests: XCTestCase {
         XCTAssertEqual(leadOnly.byBucket.map(\.key), [.lead])
     }
 
+    func testCustomRangeIsInclusiveByDay() throws {
+        let store = try SessionsStore(path: dbPath)
+        let cube = try UsageCubeBuilder.build(store: store, nowSec: Self.now, pins: [:], priceSnapshot: .empty)
+        let all = UsageSlice(cube: cube, filter: UsageFilter(period: .all), now: Self.now)
+        let nowDate = Date(timeIntervalSince1970: TimeInterval(Self.now))
+        let cal = ISODay.calendar
+        let today = cal.startOfDay(for: nowDate)
+        let start = cal.date(byAdding: .day, value: -6, to: today)!
+
+        let custom = UsageFilter.custom(from: today, to: start)
+        XCTAssertEqual(custom.period, .custom)
+        XCTAssertEqual(custom.fromSec, Int(start.timeIntervalSince1970), "endpoints are swapped and snapped")
+        XCTAssertEqual(custom.toSec, Int(cal.date(byAdding: .day, value: 1, to: today)!.timeIntervalSince1970) - 1)
+
+        let week = UsageSlice(cube: cube, filter: custom, now: Self.now)
+        XCTAssertGreaterThan(week.totals.turns, 0)
+        XCTAssertLessThan(week.totals.turns, all.totals.turns)
+        XCTAssertEqual(week.filledTimeline(now: Self.now).count, 7)
+
+        let single = UsageSlice(cube: cube, filter: .custom(from: today, to: today), now: Self.now)
+        XCTAssertEqual(single.totals.turns, UsageSlice(cube: cube, filter: UsageFilter(period: .today), now: Self.now).totals.turns)
+
+        var wide = UsageFilter.custom(from: Date(timeIntervalSince1970: 0), to: today)
+        wide.buckets = [.lead]
+        XCTAssertEqual(UsageSlice(cube: cube, filter: wide, now: Self.now).byBucket.map(\.key), [.lead])
+    }
+
     func testPriceParsing() {
         let json = """
         {"families":[{"variants":[

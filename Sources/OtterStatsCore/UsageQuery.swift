@@ -2,7 +2,7 @@ import Foundation
 
 /// Period presets the menu bar and dashboard share.
 public enum Period: String, CaseIterable, Codable, Sendable, Identifiable {
-    case today, week, month, quarter, year, all
+    case today, week, month, quarter, year, all, custom
 
     public var id: String { rawValue }
 
@@ -14,6 +14,7 @@ public enum Period: String, CaseIterable, Codable, Sendable, Identifiable {
         case .quarter: return "90 days"
         case .year: return "365 days"
         case .all: return "All embedded"
+        case .custom: return "Custom"
         }
     }
 
@@ -25,6 +26,7 @@ public enum Period: String, CaseIterable, Codable, Sendable, Identifiable {
         case .quarter: return "90d"
         case .year: return "365d"
         case .all: return "all"
+        case .custom: return "custom"
         }
     }
 
@@ -35,16 +37,17 @@ public enum Period: String, CaseIterable, Codable, Sendable, Identifiable {
         case .month: return 30
         case .quarter: return 90
         case .year: return 365
-        case .all: return nil
+        case .all, .custom: return nil
         }
     }
 
     /// Epoch seconds of the period start, or nil for everything embedded.
+    /// `.custom` has no implicit start; callers set `UsageFilter.fromSec`/`toSec` explicitly.
     public func fromSec(now: Int = Int(Date().timeIntervalSince1970)) -> Int? {
         switch self {
         case .today:
             return Int(ISODay.calendar.startOfDay(for: Date(timeIntervalSince1970: TimeInterval(now))).timeIntervalSince1970)
-        case .all:
+        case .all, .custom:
             return nil
         default:
             return now - (days ?? 0) * 86400
@@ -69,6 +72,18 @@ public struct UsageFilter: Hashable, Sendable {
 
     public var hasSlicers: Bool {
         !projects.isEmpty || !sessions.isEmpty || !agents.isEmpty || !buckets.isEmpty || !models.isEmpty || !query.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// Inclusive day range, both ends snapped to local day boundaries.
+    public static func custom(from start: Date, to end: Date) -> UsageFilter {
+        var f = UsageFilter(period: .custom)
+        let cal = ISODay.calendar
+        let lo = cal.startOfDay(for: min(start, end))
+        let hiStart = cal.startOfDay(for: max(start, end))
+        let hi = cal.date(byAdding: .day, value: 1, to: hiStart) ?? hiStart
+        f.fromSec = Int(lo.timeIntervalSince1970)
+        f.toSec = Int(hi.timeIntervalSince1970) - 1
+        return f
     }
 
     public mutating func clearSlicers() {
