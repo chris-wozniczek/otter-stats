@@ -78,9 +78,9 @@ final class CubeTests: XCTestCase {
         let store = try SessionsStore(path: dbPath)
         var snapshot = PriceSnapshot.read(from: pricesURL)
         snapshot.prices["compactor"] = nil
-        XCTAssertEqual(snapshot.referenceRate?.model, "swe-1-7")
+        XCTAssertEqual(snapshot.referenceRate.model, "swe-1-7-medium", "Medium wins over Lightning")
         let cube = try UsageCubeBuilder.build(store: store, nowSec: Self.now, pins: [:], priceSnapshot: snapshot)
-        XCTAssertEqual(cube.referenceModel, "swe-1-7")
+        XCTAssertEqual(cube.referenceModel, "swe-1-7-medium")
         let all = UsageSlice(cube: cube, filter: UsageFilter(period: .all), now: Self.now)
         let t = all.totals
         XCTAssertEqual(t.paidTokens + t.freeTokens + t.unknownTokens, t.tokens)
@@ -90,10 +90,12 @@ final class CubeTests: XCTestCase {
         XCTAssertGreaterThan(t.equivalentUSD, 0)
 
         let free = all.byModel.first { cube.models[$0.key].id == "swe-2-high" }!.totals
-        let ref = snapshot.prices["swe-1-7"]!
+        let ref = snapshot.prices["swe-1-7-medium"]!
+        XCTAssertEqual(ref.input, 0.5e-6); XCTAssertEqual(ref.cached, 0.2e-6); XCTAssertEqual(ref.output, 2.5e-6)
         XCTAssertEqual(free.costUSD, 0)
         XCTAssertEqual(free.equivalentUSD, ref.rate(input: free.input, cacheRead: free.cacheRead, cacheCreation: free.cacheCreation, output: free.output), accuracy: 1e-9)
-        XCTAssertEqual(t.equivalentUSD, free.equivalentUSD, accuracy: 1e-9, "only free-tier usage is simulated")
+        let freeTotal = all.byModel.filter { cube.models[$0.key].pricing == .free }.reduce(0.0) { $0 + $1.totals.equivalentUSD }
+        XCTAssertEqual(t.equivalentUSD, freeTotal, accuracy: 1e-9, "only free-tier usage is simulated")
 
         for cls in PricingClass.allCases {
             var f = UsageFilter(period: .all); f.pricing = [cls]
@@ -103,8 +105,13 @@ final class CubeTests: XCTestCase {
             XCTAssertTrue(s.sessions.allSatisfy { $0.totals.turns > 0 }, "\(cls): sessions without matching turns are out of scope")
             XCTAssertLessThanOrEqual(s.prompts, all.prompts)
         }
-        XCTAssertNil(PriceSnapshot(prices: ["swe-2-high": ModelPrice(free: true, input: 0, cached: 0, output: 0)]).referenceRate)
-        XCTAssertEqual(PriceSnapshot(prices: ["swe-2-fast": ModelPrice(free: false, input: 1, cached: 1, output: 1)]).referenceRate?.model, "swe-2-fast", "falls back to any paid SWE model")
+        let builtin = PriceSnapshot(prices: ["swe-2-high": ModelPrice(free: true, input: 0, cached: 0, output: 0)]).referenceRate
+        XCTAssertEqual(builtin.model, "swe-1-7-medium", "falls back to the built-in SWE-1.7 Medium rate")
+        XCTAssertEqual(builtin.price.rate(input: 1_000_000, cacheRead: 1_000_000, cacheCreation: 0, output: 1_000_000), 3.2, accuracy: 1e-9)
+        let lightningOnly = PriceSnapshot(prices: ["swe-1-7-lightning": ModelPrice(free: false, input: 1, cached: 1, output: 1)]).referenceRate
+        XCTAssertEqual(lightningOnly.model, "swe-1-7-medium", "Lightning is never the reference")
+        let plain = PriceSnapshot(prices: ["swe-1-7": ModelPrice(free: false, input: 1, cached: 1, output: 1)]).referenceRate
+        XCTAssertEqual(plain.model, "swe-1-7", "a paid plain swe-1-7 entry is used as listed")
     }
 
     func testPeriodFilterNarrows() throws {

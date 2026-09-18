@@ -140,8 +140,7 @@ struct DashboardView: View {
             .labelsHidden()
             .fixedSize()
             Spacer()
-            Text(store.equivalentBasis.map { "Equivalent paid cost \($0) · simulation, not a Devin charge" }
-                 ?? "Equivalent paid cost unavailable · no paid SWE model in the price snapshot")
+            Text("Equivalent cost = free-tier usage at \(store.referenceModel) rates · simulation, not a Devin charge")
                 .font(.caption).foregroundStyle(Theme.muted).lineLimit(1)
         }
         .font(.callout)
@@ -243,11 +242,11 @@ struct OverviewSection: View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 6), spacing: 10) {
             KPI(label: "Turns", value: Fmt.int(t.turns), sub: "\(Fmt.int(slice.prompts)) prompts", accent: Theme.teal)
             KPI(label: "Tokens", value: Fmt.compact(t.tokens), sub: tokenSplit(t), accent: Theme.cyan)
-            KPI(label: "Actual est. cost", value: Fmt.usd(t.costUSD, complete: t.costComplete),
-                sub: t.costComplete ? (t.hasFree ? "paid models only · free tier = $0" : "all turns priced") : "\(t.unpricedTurns) turns with unknown pricing", accent: Theme.amber)
-            KPI(label: "Equivalent paid cost", value: equivalentValue(t), sub: equivalentSub(t), accent: Theme.ok)
-            KPI(label: "Model time", value: Fmt.duration(ms: t.modelMs), sub: "avg \(Fmt.duration(ms: Int(t.avgTurnMs)))/turn", accent: Theme.violet)
-            KPI(label: "Sessions", value: "\(slice.sessionsWithTurns)", sub: "\(slice.activeSessions) active · cache hit \(Fmt.percent(t.cacheHitRatio))", accent: Theme.pink)
+            KPI(label: "Est. cost", value: Fmt.usd(t.costUSD, complete: t.costComplete),
+                sub: t.costComplete ? "paid models" : "\(t.unpricedTurns) unpriced turns", accent: Theme.amber)
+            KPI(label: "Equivalent cost", value: equivalentValue(t), sub: equivalentSub(t), accent: Theme.ok)
+            KPI(label: "Model time", value: Fmt.duration(ms: t.modelMs), sub: "\(Fmt.duration(ms: Int(t.avgTurnMs))) per turn", accent: Theme.violet)
+            KPI(label: "Sessions", value: "\(slice.sessionsWithTurns)", sub: "\(slice.activeSessions) active", accent: Theme.pink)
         }
         HStack(alignment: .top, spacing: 16) {
             Panel(title: "Who burned it", subtitle: "share of tokens by bucket") {
@@ -289,19 +288,17 @@ struct OverviewSection: View {
         if t.paidTokens > 0 { parts.append("\(Fmt.compact(t.paidTokens)) paid") }
         if t.freeTokens > 0 { parts.append("\(Fmt.compact(t.freeTokens)) free") }
         if t.unknownTokens > 0 { parts.append("\(Fmt.compact(t.unknownTokens)) unknown") }
-        return parts.isEmpty ? "in+out+cache read" : parts.joined(separator: " · ")
+        return parts.isEmpty ? "in + out + cache" : parts.joined(separator: " · ")
     }
 
     private func equivalentValue(_ t: UsageTotals) -> String {
         guard t.hasFree else { return "—" }
-        guard store.equivalentBasis != nil else { return "n/a" }
         return Fmt.usd(t.billedEquivalentUSD, complete: t.costComplete)
     }
 
     private func equivalentSub(_ t: UsageTotals) -> String {
-        guard t.hasFree else { return "no free-tier usage in period" }
-        guard let basis = store.equivalentBasis else { return "no paid SWE model in price snapshot" }
-        return "+\(Fmt.usd(t.equivalentUSD)) for \(Fmt.compact(t.freeTokens)) free tokens \(basis) · simulation"
+        guard t.hasFree else { return "no free-tier usage" }
+        return "+\(Fmt.usd(t.equivalentUSD)) if free tier billed"
     }
 }
 
@@ -392,7 +389,7 @@ struct ModelsSection: View {
                 .frame(height: max(160, CGFloat(slice.byModel.count) * 26))
             }
         }
-        Panel(title: "All models", subtitle: store.equivalentBasis.map { "equivalent = \($0) · simulation, not a charge" } ?? "equivalent cost unavailable: no paid SWE model in the price snapshot") {
+        Panel(title: "All models", subtitle: "equivalent = free-tier usage at \(store.referenceModel) rates · simulation") {
             UsageTable(rows: slice.byModel.enumerated().map { i, k in
                 let m = slice.model(k.key)
                 let price = m.price.map { p in p.free ? "free tier · actual $0" : "$\(Fmt.trim(p.input * 1e6)) in · $\(Fmt.trim(p.output * 1e6)) out /1M" } ?? "run devin models list to price"
