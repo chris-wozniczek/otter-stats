@@ -32,6 +32,7 @@ final class UsageStore: ObservableObject {
     @Published private(set) var loading = false
     @Published private(set) var error: String?
     @Published private(set) var lastRefresh: Date?
+    private var loadedSource: String?
     @Published var filter = UsageFilter(period: .week) {
         didSet { reslice() }
     }
@@ -50,6 +51,7 @@ final class UsageStore: ObservableObject {
     private var fileSource: DispatchSourceFileSystemObject?
     private var fileDescriptor: Int32 = -1
     private var inflight = false
+    private var refreshQueued = false
 
     var menuBarMetric: MenuBarMetric { MenuBarMetric(rawValue: menuBarMetricRaw) ?? .cost }
     var menuBarPeriod: Period { Period(rawValue: menuBarPeriodRaw) ?? .today }
@@ -104,7 +106,7 @@ final class UsageStore: ObservableObject {
     }
 
     func refresh() {
-        guard !inflight else { return }
+        guard !inflight else { refreshQueued = true; return }
         inflight = true
         loading = true
         let path = resolvedDBPath
@@ -130,11 +132,21 @@ final class UsageStore: ObservableObject {
                 switch result {
                 case .success(let cube):
                     self.cube = cube
+                    self.loadedSource = path
                     self.error = nil
                     self.lastRefresh = Date()
                     self.reslice()
                 case .failure(let err):
+                    if self.loadedSource != path {
+                        self.cube = .empty
+                        self.loadedSource = nil
+                        self.reslice()
+                    }
                     self.error = Self.describe(err)
+                }
+                if self.refreshQueued {
+                    self.refreshQueued = false
+                    self.refresh()
                 }
             }
         }
