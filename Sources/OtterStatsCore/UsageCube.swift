@@ -179,7 +179,7 @@ public enum UsageCubeBuilder {
             if t.metricsMissing { f.metricsMissing += 1; quality.metricsMissing += 1 }
             if let price {
                 f.costUSD += price.cost(of: t)
-                if price.free, let reference {
+                if price.free {
                     f.equivalentUSD += reference.price.rate(input: t.input, cacheRead: t.cacheRead, cacheCreation: t.cacheCreation, output: t.output)
                 }
             } else { f.priced = false; quality.unpricedTurns += 1 }
@@ -251,7 +251,7 @@ public enum UsageCubeBuilder {
             quality: quality,
             priceSnapshotAt: priceSnapshot.generatedAt,
             unpricedModels: modelsDim.list.filter { $0.price == nil }.map(\.id),
-            referenceModel: reference?.model,
+            referenceModel: reference.model,
             pins: pins,
             pinDrift: drift.values.sorted { $0.turns > $1.turns }
         )

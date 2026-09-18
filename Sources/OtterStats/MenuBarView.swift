@@ -72,7 +72,7 @@ struct MenuBarView: View {
     }
 
     private func costSub(_ t: UsageTotals) -> String {
-        if t.equivalentUSD > 0 { return "≈\(Fmt.usd(t.billedEquivalentUSD)) if free tier\nwere billed (\(store.cube.referenceModel ?? "SWE") rates)" }
+        if t.equivalentUSD > 0 { return "≈\(Fmt.usd(t.billedEquivalentUSD)) if free tier\nwere billed (\(store.referenceModel) rates)" }
         if t.hasFree { return "free-tier usage counted as $0" }
         return t.costComplete ? "\(t.pricedTurns) priced turns" : "\(t.unpricedTurns) unpriced turns"
     }

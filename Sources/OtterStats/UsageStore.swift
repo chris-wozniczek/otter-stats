@@ -260,8 +260,8 @@ final class UsageStore: ObservableObject {
         filter = f
     }
 
-    /// Wording for the counterfactual cost, or nil when the snapshot has no paid SWE model to compare against.
-    var equivalentBasis: String? { cube.referenceModel.map { "if billed at \($0) rates" } }
+    /// Paid model whose rate prices the counterfactual (equivalent) cost.
+    var referenceModel: String { cube.referenceModel ?? PriceSnapshot.swe17Medium.model }
 
     private func toggle<T: Hashable>(_ set: inout Set<T>, _ v: T) {
         if set.contains(v) { set.remove(v) } else { set.insert(v) }

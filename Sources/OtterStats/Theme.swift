@@ -90,11 +90,14 @@ struct KPI: View {
                 .font(.system(size: 10, weight: .semibold))
                 .tracking(0.8)
                 .foregroundStyle(accent)
-            if let sub {
-                Text(sub).font(.caption2).foregroundStyle(Theme.muted).lineLimit(2).fixedSize(horizontal: false, vertical: true)
-            }
+            Text(sub ?? " ")
+                .font(.caption2)
+                .foregroundStyle(Theme.muted)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .help(sub ?? "")
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
         .padding(12)
         .background(Theme.glass, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.line))

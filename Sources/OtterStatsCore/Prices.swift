@@ -18,22 +18,21 @@ public struct PriceSnapshot: Sendable {
 
     public static let empty = PriceSnapshot()
 
-    /// A paid model whose listed rate free-tier usage is compared against.
-    /// All SWE models are billed at the same rate, so SWE-1.7 is the reference;
-    /// any other paid SWE model is the fallback. Nil means no comparison is possible.
-    public var referenceRate: (model: String, price: ModelPrice)? {
-        let paidSWE = prices.filter { $0.key.lowercased().hasPrefix("swe-") && !$0.value.free }
-        let ranked = paidSWE.sorted { a, b in
-            let pa = Self.isSWE17(a.key), pb = Self.isSWE17(b.key)
-            if pa != pb { return pa }
-            return a.key < b.key
-        }
-        return ranked.first.map { (model: $0.key, price: $0.value) }
+    /// SWE-1.7 (Medium) list price, $0.50 / $0.20 / $2.50 per 1M input / cached / output.
+    public static let swe17Medium = (model: "swe-1-7-medium", price: ModelPrice(free: false, input: 0.5e-6, cached: 0.2e-6, output: 2.5e-6))
+
+    /// The paid rate free-tier usage is compared against: the snapshot's explicit
+    /// SWE-1.7 Medium entry when listed as paid, otherwise the built-in SWE-1.7
+    /// Medium list price. Plain `swe-1-7` and Lightning entries are never used.
+    public var referenceRate: (model: String, price: ModelPrice) {
+        let candidates = prices.filter { Self.isSWE17Medium($0.key) && !$0.value.free }
+        return candidates.min { $0.key < $1.key }.map { (model: $0.key, price: $0.value) } ?? Self.swe17Medium
     }
 
-    private static func isSWE17(_ id: String) -> Bool {
+    private static func isSWE17Medium(_ id: String) -> Bool {
         let s = id.lowercased()
-        return s.hasPrefix("swe-1.7") || s.hasPrefix("swe-1-7") || s.hasPrefix("swe-17")
+        let swe17 = s.hasPrefix("swe-1.7") || s.hasPrefix("swe-1-7") || s.hasPrefix("swe-17")
+        return swe17 && s.contains("medium")
     }
 
     /// Tolerant read: a missing or corrupt file is an empty snapshot.

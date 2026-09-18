@@ -154,7 +154,9 @@ public enum FixtureDatabase {
             "claude-sonnet-4-5": ModelPrice(free: false, input: 3e-6, cached: 0.3e-6, output: 15e-6),
             "gpt-5": ModelPrice(free: false, input: 1.25e-6, cached: 0.125e-6, output: 10e-6),
             "gemini-2-5-pro": ModelPrice(free: false, input: 1.25e-6, cached: 0.31e-6, output: 10e-6),
-            "swe-1-7": ModelPrice(free: false, input: 2e-6, cached: 0.2e-6, output: 8e-6),
+            "swe-1-7": ModelPrice(free: true, input: 0, cached: 0, output: 0),
+            "swe-1-7-medium": PriceSnapshot.swe17Medium.price,
+            "swe-1-7-lightning": ModelPrice(free: false, input: 2e-6, cached: 0.2e-6, output: 8e-6),
             "swe-2-high": ModelPrice(free: true, input: 0, cached: 0, output: 0),
             "compactor": ModelPrice(free: true, input: 0, cached: 0, output: 0),
         ], generatedAt: Date(), source: url.path)
