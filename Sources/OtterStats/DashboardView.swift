@@ -480,7 +480,7 @@ struct SessionsSection: View {
             }
             if slice.sessions.isEmpty { EmptyHint() }
         }
-        .onChange(of: slice.sessions.count) { _, _ in shown = Self.pageSize }
+        .onChange(of: slice.sessions.map(\.id)) { _, _ in shown = Self.pageSize }
     }
 }
 
