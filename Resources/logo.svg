@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-label="Otter Swarm">
+  <defs>
+    <linearGradient id="lg-grad" x1="9.5" y1="6" x2="54.5" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#14b8a6"/>
+    </linearGradient>
+  </defs>
+  <g class="lg-spokes" stroke="#22d3ee" stroke-width="1" opacity=".35">
+    <line class="lg-spoke" x1="32" y1="9.4" x2="32" y2="16.6"/>
+    <line class="lg-spoke" x1="51.5" y1="20.8" x2="45.2" y2="24.4"/>
+    <line class="lg-spoke" x1="51.5" y1="43.2" x2="45.2" y2="39.6"/>
+    <line class="lg-spoke" x1="32" y1="54.6" x2="32" y2="47.4"/>
+    <line class="lg-spoke" x1="12.5" y1="43.2" x2="18.8" y2="39.6"/>
+    <line class="lg-spoke" x1="12.5" y1="20.8" x2="18.8" y2="24.4"/>
+  </g>
+  <path class="lg-ring" d="M32 6 L54.5 19 L54.5 45 L32 58 L9.5 45 L9.5 19 Z" stroke="url(#lg-grad)" stroke-width="2.5" stroke-linejoin="round"/>
+  <g class="lg-head">
+    <circle cx="20.6" cy="25.2" r="3.4" fill="#d5deea"/>
+    <circle cx="43.4" cy="25.2" r="3.4" fill="#d5deea"/>
+    <ellipse cx="32" cy="33" rx="14.2" ry="12.2" fill="#e8eef8"/>
+    <ellipse cx="32" cy="38.6" rx="8.4" ry="5.8" fill="#c9d4e3"/>
+    <ellipse cx="32" cy="36.2" rx="2.7" ry="1.9" fill="#f59e0b"/>
+    <path d="M29.6 39.4 Q32 41.4 34.4 39.4" stroke="#33405c" stroke-width="1.1" fill="none" stroke-linecap="round"/>
+    <ellipse cx="26.6" cy="30.8" rx="1.5" ry="1.9" fill="#0d1424"/>
+    <ellipse cx="37.4" cy="30.8" rx="1.5" ry="1.9" fill="#0d1424"/>
+    <circle cx="27.1" cy="30.2" r="0.5" fill="#fff"/>
+    <circle cx="37.9" cy="30.2" r="0.5" fill="#fff"/>
+    <g class="lg-whiskers" stroke="#9fb0c8" stroke-width="1" stroke-linecap="round" opacity=".85">
+      <path d="M23.5 37.2 L15.5 35.6"/>
+      <path d="M23.5 38.8 L15 38.8"/>
+      <path d="M23.5 40.4 L15.5 42.2"/>
+      <path d="M40.5 37.2 L48.5 35.6"/>
+      <path d="M40.5 38.8 L49 38.8"/>
+      <path d="M40.5 40.4 L48.5 42.2"/>
+    </g>
+  </g>
+  <g class="lg-nodes" fill="url(#lg-grad)">
+    <circle class="lg-node" cx="32" cy="6" r="3"/>
+    <circle class="lg-node" cx="54.5" cy="19" r="3"/>
+    <circle class="lg-node" cx="54.5" cy="45" r="3"/>
+    <circle class="lg-node" cx="32" cy="58" r="3"/>
+    <circle class="lg-node" cx="9.5" cy="45" r="3"/>
+    <circle class="lg-node" cx="9.5" cy="19" r="3"/>
+  </g>
+</svg>
