@@ -110,8 +110,9 @@ final class CubeTests: XCTestCase {
         XCTAssertEqual(builtin.price.rate(input: 1_000_000, cacheRead: 1_000_000, cacheCreation: 0, output: 1_000_000), 3.2, accuracy: 1e-9)
         let lightningOnly = PriceSnapshot(prices: ["swe-1-7-lightning": ModelPrice(free: false, input: 1, cached: 1, output: 1)]).referenceRate
         XCTAssertEqual(lightningOnly.model, "swe-1-7-medium", "Lightning is never the reference")
-        let plain = PriceSnapshot(prices: ["swe-1-7": ModelPrice(free: false, input: 1, cached: 1, output: 1)]).referenceRate
-        XCTAssertEqual(plain.model, "swe-1-7", "a paid plain swe-1-7 entry is used as listed")
+        let legacyDemo = PriceSnapshot(prices: ["swe-1-7": ModelPrice(free: false, input: 2e-6, cached: 0.2e-6, output: 8e-6)]).referenceRate
+        XCTAssertEqual(legacyDemo.model, "swe-1-7-medium", "legacy paid plain swe-1-7 snapshot falls back to the built-in Medium rate")
+        XCTAssertEqual(legacyDemo.price.output, 2.5e-6)
     }
 
     func testPeriodFilterNarrows() throws {
