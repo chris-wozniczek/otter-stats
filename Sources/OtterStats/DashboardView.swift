@@ -45,6 +45,7 @@ struct DashboardView: View {
         } detail: {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    if store.filter.period == .custom { dateRangeBar }
                     if !store.activeChips.isEmpty { slicerBar }
                     if let error = store.error {
                         Label(error, systemImage: "exclamationmark.triangle.fill")
@@ -111,7 +112,7 @@ struct DashboardView: View {
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .principal) {
-            Picker("Period", selection: $store.filter.period) {
+            Picker("Period", selection: Binding(get: { store.filter.period }, set: { store.setPeriod($0) })) {
                 ForEach(Period.allCases) { p in Text(p.label).tag(p) }
             }
             .pickerStyle(.segmented)
@@ -123,6 +124,61 @@ struct DashboardView: View {
         }
         ToolbarItem {
             SettingsLink { Image(systemName: "gearshape") }.help("Settings")
+        }
+    }
+
+    private var dateRangeBar: some View {
+        let today = ISODay.calendar.startOfDay(for: Date())
+        let days = (ISODay.calendar.dateComponents([.day], from: ISODay.calendar.startOfDay(for: store.customStart), to: ISODay.calendar.startOfDay(for: store.customEnd)).day ?? 0) + 1
+        return HStack(spacing: 10) {
+            Image(systemName: "calendar").foregroundStyle(Theme.cyan)
+            Text("From").foregroundStyle(Theme.muted)
+            CalendarButton(date: Binding(get: { store.customStart }, set: { store.customStart = $0 }), range: Date.distantPast...store.customEnd)
+            Text("To").foregroundStyle(Theme.muted)
+            CalendarButton(date: Binding(get: { store.customEnd }, set: { store.customEnd = $0 }), range: min(store.customStart, today)...today)
+            Text("\(days) day\(days == 1 ? "" : "s")").font(.caption.monospacedDigit()).foregroundStyle(Theme.muted)
+            Spacer()
+            ForEach([7, 30, 90], id: \.self) { n in
+                Button("Last \(n)") {
+                    store.customEnd = today
+                    store.customStart = ISODay.calendar.date(byAdding: .day, value: -(n - 1), to: today) ?? today
+                }
+            }
+            Button("This month") {
+                store.customEnd = today
+                store.customStart = ISODay.calendar.dateInterval(of: .month, for: today)?.start ?? today
+            }
+        }
+        .font(.callout)
+        .controlSize(.small)
+        .padding(10)
+        .background(Theme.glass, in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private struct CalendarButton: View {
+        @Binding var date: Date
+        let range: ClosedRange<Date>
+        @State private var open = false
+
+        var body: some View {
+            Button {
+                open.toggle()
+            } label: {
+                Text(date, format: .dateTime.day().month(.abbreviated).year())
+                    .monospacedDigit()
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(open ? Theme.cyan : Theme.line))
+            }
+            .buttonStyle(.plain)
+            .popover(isPresented: $open, arrowEdge: .bottom) {
+                DatePicker("", selection: $date, in: range, displayedComponents: .date)
+                    .datePickerStyle(.graphical)
+                    .labelsHidden()
+                    .padding(10)
+                    .preferredColorScheme(.dark)
+                    .tint(Theme.cyan)
+            }
         }
     }
 

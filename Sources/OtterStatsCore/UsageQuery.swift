@@ -2,7 +2,7 @@ import Foundation
 
 /// Period presets the menu bar and dashboard share.
 public enum Period: String, CaseIterable, Codable, Sendable, Identifiable {
-    case today, week, month, quarter, year, all
+    case today, week, month, quarter, year, all, custom
 
     public var id: String { rawValue }
 
@@ -14,6 +14,7 @@ public enum Period: String, CaseIterable, Codable, Sendable, Identifiable {
         case .quarter: return "90 days"
         case .year: return "365 days"
         case .all: return "All embedded"
+        case .custom: return "Custom"
         }
     }
 
@@ -25,6 +26,7 @@ public enum Period: String, CaseIterable, Codable, Sendable, Identifiable {
         case .quarter: return "90d"
         case .year: return "365d"
         case .all: return "all"
+        case .custom: return "custom"
         }
     }
 
@@ -35,19 +37,21 @@ public enum Period: String, CaseIterable, Codable, Sendable, Identifiable {
         case .month: return 30
         case .quarter: return 90
         case .year: return 365
-        case .all: return nil
+        case .all, .custom: return nil
         }
     }
 
     /// Epoch seconds of the period start, or nil for everything embedded.
+    /// Rolling presets cover exactly `days` local calendar dates ending today.
+    /// `.custom` has no implicit start; callers set `UsageFilter.fromSec`/`toSec` explicitly.
     public func fromSec(now: Int = Int(Date().timeIntervalSince1970)) -> Int? {
         switch self {
-        case .today:
-            return Int(ISODay.calendar.startOfDay(for: Date(timeIntervalSince1970: TimeInterval(now))).timeIntervalSince1970)
-        case .all:
+        case .all, .custom:
             return nil
         default:
-            return now - (days ?? 0) * 86400
+            let today = ISODay.calendar.startOfDay(for: Date(timeIntervalSince1970: TimeInterval(now)))
+            let start = ISODay.calendar.date(byAdding: .day, value: -((days ?? 1) - 1), to: today) ?? today
+            return Int(start.timeIntervalSince1970)
         }
     }
 }
@@ -69,6 +73,18 @@ public struct UsageFilter: Hashable, Sendable {
 
     public var hasSlicers: Bool {
         !projects.isEmpty || !sessions.isEmpty || !agents.isEmpty || !buckets.isEmpty || !models.isEmpty || !query.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// Inclusive day range, both ends snapped to local day boundaries.
+    public static func custom(from start: Date, to end: Date) -> UsageFilter {
+        var f = UsageFilter(period: .custom)
+        let cal = ISODay.calendar
+        let lo = cal.startOfDay(for: min(start, end))
+        let hiStart = cal.startOfDay(for: max(start, end))
+        let hi = cal.date(byAdding: .day, value: 1, to: hiStart) ?? hiStart
+        f.fromSec = Int(lo.timeIntervalSince1970)
+        f.toSec = Int(hi.timeIntervalSince1970) - 1
+        return f
     }
 
     public mutating func clearSlicers() {
@@ -319,16 +335,20 @@ public struct UsageSlice: Sendable {
     public func project(_ index: Int) -> UsageCube.Project { cube.projects[index] }
 
     /// Continuous day series (zero-filled) between the period start and today.
-    public func filledTimeline(now: Int = Int(Date().timeIntervalSince1970)) -> [DayPoint] {
-        let start: Int
+    /// The start is clamped to the cube's embedded window and, past `maxPoints`, to the newest dates so recent data is never dropped.
+    public func filledTimeline(now: Int = Int(Date().timeIntervalSince1970), maxPoints: Int = 400) -> [DayPoint] {
+        var start: Int
         if let fromDay, let d = ISODay.date(from: fromDay) { start = Int(d.timeIntervalSince1970) }
         else if let first = timeline.first { start = Int(first.date.timeIntervalSince1970) }
         else { return [] }
         let end = toSec ?? now
+        if cube.from > 0, let embedded = ISODay.date(from: isoDay(cube.from)) { start = max(start, Int(embedded.timeIntervalSince1970)) }
+        let endDay = ISODay.calendar.startOfDay(for: Date(timeIntervalSince1970: TimeInterval(end)))
+        if let floor = ISODay.calendar.date(byAdding: .day, value: -(maxPoints - 1), to: endDay) { start = max(start, Int(floor.timeIntervalSince1970)) }
         var out: [DayPoint] = []
         var cursor = Date(timeIntervalSince1970: TimeInterval(start))
         let map = Dictionary(timeline.map { ($0.day, $0) }, uniquingKeysWith: { a, _ in a })
-        while Int(cursor.timeIntervalSince1970) <= end && out.count < 400 {
+        while Int(cursor.timeIntervalSince1970) <= end && out.count < maxPoints {
             let day = isoDay(Int(cursor.timeIntervalSince1970))
             out.append(map[day] ?? DayPoint(day: day, totals: UsageTotals(), byBucket: [:]))
             guard let next = ISODay.calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
