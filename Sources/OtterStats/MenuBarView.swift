@@ -9,7 +9,7 @@ struct MenuBarView: View {
     @AppStorage(SettingsKeys.popoverPeriod) private var periodRaw: String = Period.today.rawValue
 
     private var period: Period { Period(rawValue: periodRaw) ?? .today }
-    private var slice: UsageSlice { period == .today ? store.todaySlice : store.weekSlice }
+    private var slice: UsageSlice { store.quickSlice(for: period) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -55,7 +55,7 @@ struct MenuBarView: View {
                     .font(.caption2).foregroundStyle(Theme.muted)
             }
             Spacer()
-            PillToggle(selection: $periodRaw, options: [(Period.today.rawValue, "Today"), (Period.week.rawValue, "7 days")])
+            PillToggle(selection: $periodRaw, options: [(Period.today.rawValue, "Today"), (Period.week.rawValue, "7d"), (Period.month.rawValue, "30d")])
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
     }
@@ -95,10 +95,11 @@ struct MenuBarView: View {
     }
 
     @ViewBuilder private var sparkline: some View {
-        let points = store.fortnightSlice.filledTimeline().suffix(14)
+        let days = period == .month ? 30 : 14
+        let points = (period == .month ? store.monthSlice : store.fortnightSlice).filledTimeline().suffix(days)
         if points.contains(where: { $0.totals.turns > 0 }) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Last 14 days · tokens").font(.caption.weight(.semibold)).foregroundStyle(Theme.muted)
+                Text("Last \(days) days · tokens").font(.caption.weight(.semibold)).foregroundStyle(Theme.muted)
                 Chart(Array(points)) { p in
                     BarMark(x: .value("Day", p.date, unit: .day), y: .value("Tokens", p.totals.tokens))
                         .foregroundStyle(Theme.gradient)
