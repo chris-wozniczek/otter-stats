@@ -104,6 +104,8 @@ final class UsageStore: ObservableObject {
     /// Switches the dashboard period; presets drop any explicit range, `.custom` installs the saved one.
     func setPeriod(_ period: Period) {
         if period == .custom {
+            if customStartRaw <= 0 { customStartRaw = customStart.timeIntervalSince1970 }
+            if customEndRaw <= 0 { customEndRaw = customEnd.timeIntervalSince1970 }
             applyCustomRange()
         } else {
             var f = filter

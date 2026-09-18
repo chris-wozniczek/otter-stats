@@ -82,11 +82,29 @@ final class CubeTests: XCTestCase {
         XCTAssertLessThan(week.totals.turns, all.totals.turns)
         XCTAssertGreaterThan(week.totals.turns, 0)
         XCTAssertFalse(all.totals.costComplete, "no snapshot → every turn unpriced")
-        XCTAssertLessThanOrEqual(week.filledTimeline(now: Self.now).count, 8)
+        XCTAssertEqual(week.filledTimeline(now: Self.now).count, 7, "rolling presets cover exactly N calendar dates")
+        XCTAssertEqual(UsageSlice(cube: cube, filter: UsageFilter(period: .month), now: Self.now).filledTimeline(now: Self.now).count, 30)
+        XCTAssertEqual(UsageSlice(cube: cube, filter: UsageFilter(period: .today), now: Self.now).filledTimeline(now: Self.now).count, 1)
         var byBucket = UsageFilter(period: .all)
         byBucket.buckets = [.lead]
         let leadOnly = UsageSlice(cube: cube, filter: byBucket, now: Self.now)
         XCTAssertEqual(leadOnly.byBucket.map(\.key), [.lead])
+    }
+
+    func testFilledTimelineKeepsNewestDatesWhenCapped() throws {
+        let store = try SessionsStore(path: dbPath)
+        let cube = try UsageCubeBuilder.build(store: store, nowSec: Self.now, pins: [:], priceSnapshot: .empty)
+        let cal = ISODay.calendar
+        let today = cal.startOfDay(for: Date(timeIntervalSince1970: TimeInterval(Self.now)))
+        let longAgo = cal.date(byAdding: .day, value: -600, to: today)!
+        let slice = UsageSlice(cube: cube, filter: UsageFilter.custom(from: longAgo, to: today), now: Self.now)
+        let points = slice.filledTimeline(now: Self.now)
+        XCTAssertEqual(points.last?.day, isoDay(Self.now), "the newest date is never dropped")
+        XCTAssertLessThanOrEqual(points.count, 400)
+        XCTAssertGreaterThanOrEqual(points.first!.day, isoDay(cube.from), "start is clamped to the embedded window")
+        let capped = slice.filledTimeline(now: Self.now, maxPoints: 10)
+        XCTAssertEqual(capped.count, 10)
+        XCTAssertEqual(capped.last?.day, isoDay(Self.now))
     }
 
     func testCustomRangeIsInclusiveByDay() throws {
