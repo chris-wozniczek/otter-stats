@@ -74,6 +74,39 @@ final class CubeTests: XCTestCase {
         XCTAssertTrue(slice.totals.costComplete, "every fixture model is priced")
     }
 
+    func testPricingClassesAndEquivalentCost() throws {
+        let store = try SessionsStore(path: dbPath)
+        var snapshot = PriceSnapshot.read(from: pricesURL)
+        snapshot.prices["compactor"] = nil
+        XCTAssertEqual(snapshot.referenceRate?.model, "swe-1-7")
+        let cube = try UsageCubeBuilder.build(store: store, nowSec: Self.now, pins: [:], priceSnapshot: snapshot)
+        XCTAssertEqual(cube.referenceModel, "swe-1-7")
+        let all = UsageSlice(cube: cube, filter: UsageFilter(period: .all), now: Self.now)
+        let t = all.totals
+        XCTAssertEqual(t.paidTokens + t.freeTokens + t.unknownTokens, t.tokens)
+        XCTAssertGreaterThan(t.freeTokens, 0, "swe-2-high is free tier")
+        XCTAssertGreaterThan(t.unknownTokens, 0, "compactor has no price")
+        XCTAssertFalse(t.costComplete)
+        XCTAssertGreaterThan(t.equivalentUSD, 0)
+
+        let free = all.byModel.first { cube.models[$0.key].id == "swe-2-high" }!.totals
+        let ref = snapshot.prices["swe-1-7"]!
+        XCTAssertEqual(free.costUSD, 0)
+        XCTAssertEqual(free.equivalentUSD, ref.rate(input: free.input, cacheRead: free.cacheRead, cacheCreation: free.cacheCreation, output: free.output), accuracy: 1e-9)
+        XCTAssertEqual(t.equivalentUSD, free.equivalentUSD, accuracy: 1e-9, "only free-tier usage is simulated")
+
+        for cls in PricingClass.allCases {
+            var f = UsageFilter(period: .all); f.pricing = [cls]
+            let s = UsageSlice(cube: cube, filter: f, now: Self.now)
+            XCTAssertTrue(s.byModel.allSatisfy { cube.models[$0.key].pricing == cls }, "\(cls)")
+            XCTAssertGreaterThan(s.totals.turns, 0, "\(cls)")
+            XCTAssertTrue(s.sessions.allSatisfy { $0.totals.turns > 0 }, "\(cls): sessions without matching turns are out of scope")
+            XCTAssertLessThanOrEqual(s.prompts, all.prompts)
+        }
+        XCTAssertNil(PriceSnapshot(prices: ["swe-2-high": ModelPrice(free: true, input: 0, cached: 0, output: 0)]).referenceRate)
+        XCTAssertEqual(PriceSnapshot(prices: ["swe-2-fast": ModelPrice(free: false, input: 1, cached: 1, output: 1)]).referenceRate?.model, "swe-2-fast", "falls back to any paid SWE model")
+    }
+
     func testPeriodFilterNarrows() throws {
         let store = try SessionsStore(path: dbPath)
         let cube = try UsageCubeBuilder.build(store: store, nowSec: Self.now, pins: [:], priceSnapshot: .empty)

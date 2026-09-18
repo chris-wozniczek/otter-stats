@@ -217,7 +217,31 @@ public struct ModelPrice: Codable, Hashable, Sendable {
 
     public func cost(of turn: Turn) -> Double {
         if free { return 0 }
-        let write = cacheWrite ?? input
-        return Double(turn.input) * input + Double(turn.cacheRead) * cached + Double(turn.cacheCreation) * write + Double(turn.output) * output
+        return rate(input: turn.input, cacheRead: turn.cacheRead, cacheCreation: turn.cacheCreation, output: turn.output)
     }
+
+    /// The listed rates applied to raw token counts, ignoring `free`.
+    public func rate(input i: Int, cacheRead: Int, cacheCreation: Int, output o: Int) -> Double {
+        let write = cacheWrite ?? input
+        return Double(i) * input + Double(cacheRead) * cached + Double(cacheCreation) * write + Double(o) * output
+    }
+
+    public var pricing: PricingClass { free ? .free : .paid }
+}
+
+/// How a model's usage is billed according to the local price snapshot.
+public enum PricingClass: String, CaseIterable, Codable, Sendable, Identifiable {
+    case paid, free, unknown
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .paid: return "Paid"
+        case .free: return "Free tier"
+        case .unknown: return "Unknown"
+        }
+    }
+
+    public static func of(_ price: ModelPrice?) -> PricingClass { price?.pricing ?? .unknown }
 }

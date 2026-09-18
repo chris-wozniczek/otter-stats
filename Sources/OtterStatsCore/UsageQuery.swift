@@ -65,6 +65,7 @@ public struct UsageFilter: Hashable, Sendable {
     public var agents: Set<String> = []
     public var buckets: Set<AgentBucket> = []
     public var models: Set<Int> = []
+    public var pricing: Set<PricingClass> = []
     public var query: String = ""
 
     public init(period: Period = .week) {
@@ -72,7 +73,7 @@ public struct UsageFilter: Hashable, Sendable {
     }
 
     public var hasSlicers: Bool {
-        !projects.isEmpty || !sessions.isEmpty || !agents.isEmpty || !buckets.isEmpty || !models.isEmpty || !query.trimmingCharacters(in: .whitespaces).isEmpty
+        !projects.isEmpty || !sessions.isEmpty || !agents.isEmpty || !buckets.isEmpty || !models.isEmpty || !pricing.isEmpty || !query.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     /// Inclusive day range, both ends snapped to local day boundaries.
@@ -88,7 +89,7 @@ public struct UsageFilter: Hashable, Sendable {
     }
 
     public mutating func clearSlicers() {
-        projects = []; sessions = []; agents = []; buckets = []; models = []; query = ""
+        projects = []; sessions = []; agents = []; buckets = []; models = []; pricing = []; query = ""
     }
 }
 
@@ -100,13 +101,23 @@ public struct UsageTotals: Hashable, Sendable {
     public var cacheCreation = 0
     public var modelMs = 0
     public var ttftMs = 0
+    /// Actual estimated charge: paid models at their listed rate, free tier as $0, unknown excluded.
     public var costUSD = 0.0
+    /// What free-tier usage would have cost at the reference (SWE-1.7) rate. Simulation, not a charge.
+    public var equivalentUSD = 0.0
     public var pricedTurns = 0
     public var unpricedTurns = 0
+    public var paidTokens = 0
+    public var freeTokens = 0
+    public var unknownTokens = 0
+    public var freeTurns = 0
     public var metricsMissing = 0
 
     public var tokens: Int { input + output + cacheRead }
     public var costComplete: Bool { unpricedTurns == 0 }
+    public var hasFree: Bool { freeTurns > 0 }
+    /// Actual cost plus the simulated value of free-tier usage.
+    public var billedEquivalentUSD: Double { costUSD + equivalentUSD }
     public var avgTurnMs: Double { turns > 0 ? Double(modelMs) / Double(turns) : 0 }
     public var avgTTFTMs: Double { turns > 0 ? Double(ttftMs) / Double(turns) : 0 }
     public var cacheHitRatio: Double { input + cacheRead > 0 ? Double(cacheRead) / Double(input + cacheRead) : 0 }
@@ -121,6 +132,13 @@ public struct UsageTotals: Hashable, Sendable {
         ttftMs += f.ttftMs
         metricsMissing += f.metricsMissing
         if f.priced { costUSD += f.costUSD; pricedTurns += f.turns } else { unpricedTurns += f.turns }
+        equivalentUSD += f.equivalentUSD
+        let toks = f.input + f.output + f.cacheRead
+        switch f.pricing {
+        case .paid: paidTokens += toks
+        case .free: freeTokens += toks; freeTurns += f.turns
+        case .unknown: unknownTokens += toks
+        }
     }
 }
 
@@ -240,6 +258,7 @@ public struct UsageSlice: Sendable {
         for f in cube.facts {
             guard dayPasses(f.day), sessionPasses(f.session), agentPasses(f.agent) else { continue }
             if !filter.models.isEmpty, !filter.models.contains(f.model) { continue }
+            if !filter.pricing.isEmpty, !filter.pricing.contains(f.pricing) { continue }
             totals.add(f)
             let bucket = cube.agents[f.agent].bucket
             bucketMap[bucket, default: UsageTotals()].add(f)
@@ -255,9 +274,14 @@ public struct UsageSlice: Sendable {
             dayMap[f.day] = point
         }
 
+        // Prompts, tools and sessions have no model; under a model-level filter keep only sessions with matching turns.
+        let modelScoped = !filter.models.isEmpty || !filter.pricing.isEmpty
+        let matchedSessions = Set(sessionMap.keys)
+        func sessionInScope(_ si: Int) -> Bool { !modelScoped || matchedSessions.contains(si) }
+
         var promptTotal = 0
         var promptsBySession: [Int: Int] = [:]
-        for p in cube.prompts where dayPasses(p.day) && sessionPasses(p.session) {
+        for p in cube.prompts where dayPasses(p.day) && sessionPasses(p.session) && sessionInScope(p.session) {
             promptTotal += p.prompts
             promptsBySession[p.session, default: 0] += p.prompts
         }
@@ -265,7 +289,7 @@ public struct UsageSlice: Sendable {
         var toolMap: [String: Int] = [:]
         var toolAgentMap: [Int: Int] = [:]
         var toolCalls = 0
-        for t in cube.tools where dayPasses(t.day) && sessionPasses(t.session) && agentPasses(t.agent) {
+        for t in cube.tools where dayPasses(t.day) && sessionPasses(t.session) && agentPasses(t.agent) && sessionInScope(t.session) {
             toolMap[t.tool, default: 0] += t.calls
             toolAgentMap[t.agent, default: 0] += t.calls
             toolCalls += t.calls
@@ -296,7 +320,7 @@ public struct UsageSlice: Sendable {
         // Sessions active in the period (created or touched) even with zero turns.
         var active: [SessionSummary] = []
         for (si, s) in cube.sessions.enumerated() {
-            guard sessionPasses(si) else { continue }
+            guard sessionPasses(si), sessionInScope(si) else { continue }
             let hasFacts = sessionMap[si] != nil || promptsBySession[si] != nil
             let touched: Bool = {
                 let created = s.created ?? 0, last = s.last ?? 0

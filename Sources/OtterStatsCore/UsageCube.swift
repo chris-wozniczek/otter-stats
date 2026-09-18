@@ -17,7 +17,10 @@ public struct UsageCube: Sendable {
         public var modelMs: Int
         public var ttftMs: Int
         public var costUSD: Double
+        /// What the tokens would cost at the snapshot's reference (SWE-1.7) rate; only set for free-tier models.
+        public var equivalentUSD: Double
         public var priced: Bool
+        public var pricing: PricingClass
         public var metricsMissing: Int
     }
 
@@ -53,6 +56,7 @@ public struct UsageCube: Sendable {
     public struct ModelDim: Sendable, Hashable, Identifiable {
         public let id: String
         public let price: ModelPrice?
+        public var pricing: PricingClass { PricingClass.of(price) }
     }
 
     public struct Quality: Sendable, Hashable {
@@ -88,10 +92,12 @@ public struct UsageCube: Sendable {
     public let quality: Quality
     public let priceSnapshotAt: Date?
     public let unpricedModels: [String]
+    /// Paid model whose listed rate is used for `Fact.equivalentUSD`, if the snapshot has one.
+    public let referenceModel: String?
     public let pins: [String: String]
     public let pinDrift: [PinDrift]
 
-    public static let empty = UsageCube(generatedAt: Date(), source: "", from: 0, to: 0, capDays: 0, sessions: [], projects: [], agents: [], models: [], facts: [], tools: [], prompts: [], quality: Quality(), priceSnapshotAt: nil, unpricedModels: [], pins: [:], pinDrift: [])
+    public static let empty = UsageCube(generatedAt: Date(), source: "", from: 0, to: 0, capDays: 0, sessions: [], projects: [], agents: [], models: [], facts: [], tools: [], prompts: [], quality: Quality(), priceSnapshotAt: nil, unpricedModels: [], referenceModel: nil, pins: [:], pinDrift: [])
 
     public var isEmpty: Bool { facts.isEmpty && sessions.isEmpty }
 }
@@ -145,6 +151,7 @@ public enum UsageCubeBuilder {
             modelsDim.id(m) { UsageCube.ModelDim(id: m, price: priceSnapshot.prices[m]) }
         }
 
+        let reference = priceSnapshot.referenceRate
         var facts: [String: UsageCube.Fact] = [:]
         var quality = UsageCube.Quality()
         quality.duplicates = fetch.duplicates
@@ -160,7 +167,8 @@ public enum UsageCubeBuilder {
             let day = isoDay(t.ts)
             let si = sessionIndex(s), ai = agentIndex(agent), mi = modelIndex(t.model)
             let key = "\(day)|\(si)|\(ai)|\(mi)"
-            var f = facts[key] ?? UsageCube.Fact(day: day, session: si, agent: ai, model: mi, turns: 0, input: 0, output: 0, cacheRead: 0, cacheCreation: 0, modelMs: 0, ttftMs: 0, costUSD: 0, priced: true, metricsMissing: 0)
+            let price = modelsDim.list[mi].price
+            var f = facts[key] ?? UsageCube.Fact(day: day, session: si, agent: ai, model: mi, turns: 0, input: 0, output: 0, cacheRead: 0, cacheCreation: 0, modelMs: 0, ttftMs: 0, costUSD: 0, equivalentUSD: 0, priced: true, pricing: PricingClass.of(price), metricsMissing: 0)
             f.turns += 1
             f.input += t.input
             f.output += t.output
@@ -169,8 +177,12 @@ public enum UsageCubeBuilder {
             f.modelMs += t.modelMs
             f.ttftMs += t.ttftMs
             if t.metricsMissing { f.metricsMissing += 1; quality.metricsMissing += 1 }
-            if let price = modelsDim.list[mi].price { f.costUSD += price.cost(of: t) }
-            else { f.priced = false; quality.unpricedTurns += 1 }
+            if let price {
+                f.costUSD += price.cost(of: t)
+                if price.free, let reference {
+                    f.equivalentUSD += reference.price.rate(input: t.input, cacheRead: t.cacheRead, cacheCreation: t.cacheCreation, output: t.output)
+                }
+            } else { f.priced = false; quality.unpricedTurns += 1 }
             facts[key] = f
             quality.turns += 1
             if agent.bucket == .unknown { quality.unknownTurns += 1 }
@@ -239,6 +251,7 @@ public enum UsageCubeBuilder {
             quality: quality,
             priceSnapshotAt: priceSnapshot.generatedAt,
             unpricedModels: modelsDim.list.filter { $0.price == nil }.map(\.id),
+            referenceModel: reference?.model,
             pins: pins,
             pinDrift: drift.values.sorted { $0.turns > $1.turns }
         )
