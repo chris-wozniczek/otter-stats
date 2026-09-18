@@ -24,6 +24,8 @@ enum SettingsKeys {
     static let menuBarPeriod = "menuBarPeriod"
     static let popoverPeriod = "popoverPeriod"
     static let demoMode = "demoMode"
+    static let skippedUpdate = "skippedUpdateVersion"
+    static let lastUpdateCheck = "lastUpdateCheck"
 }
 
 @MainActor

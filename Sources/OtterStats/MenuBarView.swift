@@ -4,6 +4,7 @@ import OtterStatsCore
 
 struct MenuBarView: View {
     @EnvironmentObject var store: UsageStore
+    @EnvironmentObject var updates: UpdateChecker
     @Environment(\.openWindow) private var openWindow
     @AppStorage(SettingsKeys.popoverPeriod) private var periodRaw: String = Period.today.rawValue
 
@@ -14,6 +15,10 @@ struct MenuBarView: View {
         VStack(spacing: 0) {
             header
             Divider().overlay(Theme.line)
+            if let release = updates.pending {
+                updateBanner(release)
+                Divider().overlay(Theme.line)
+            }
             ScrollView(.vertical) {
                 if let error = store.error, store.cube.isEmpty {
                     errorState(error)
@@ -169,6 +174,26 @@ struct MenuBarView: View {
             .font(.caption2).foregroundStyle(Theme.muted)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    private func updateBanner(_ release: ReleaseInfo) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "arrow.down.circle.fill").foregroundStyle(Theme.cyan)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Otter Stats \(release.version.description) is available").font(.caption.weight(.semibold))
+                Text("Installed \(updates.current.description) · Get, or copy the brew command")
+                    .font(.caption2).foregroundStyle(Theme.muted).lineLimit(1)
+            }
+            Spacer()
+            Button { updates.copyBrewCommand() } label: { Image(systemName: "doc.on.doc") }
+                .help("Copy Homebrew upgrade command")
+            Button("Get") { updates.openRelease() }.buttonStyle(.borderedProminent)
+            Button { updates.skip(release) } label: { Image(systemName: "xmark") }
+                .buttonStyle(.plain).foregroundStyle(Theme.muted).help("Skip this version")
+        }
+        .controlSize(.small)
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(Theme.cyan.opacity(0.08))
     }
 
     private func errorState(_ message: String) -> some View {

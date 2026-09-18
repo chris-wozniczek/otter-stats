@@ -78,6 +78,16 @@ CLI or Devin Desktop your usage appears immediately. No Devin data yet? Click
 Refresh prices** runs `devin models list` once, or it reuses the one Otter
 Swarm writes.
 
+### Updates
+
+At launch and then once a day the app asks the GitHub Releases API for the latest version (a
+single anonymous request; nothing about you is sent). When a newer release
+exists, a banner appears at the top of the popover with **Get** (opens the
+release page), a copy button for `brew update && brew upgrade --cask
+otter-stats`, and **×** to skip that version. **Settings → Updates** has
+**Check now** and lets you unskip. The app does not download or install
+updates itself.
+
 ## Releasing
 
 Push a tag and CI does the rest:
