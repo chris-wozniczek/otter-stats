@@ -29,13 +29,15 @@ public struct SemanticVersion: Comparable, Hashable, CustomStringConvertible, Se
     }
 
     private static func isNumeric(_ s: String) -> Bool {
-        !s.isEmpty && s.allSatisfy(\.isASCIIDigit) && (s == "0" || !s.hasPrefix("0"))
+        !s.isEmpty && isDigits(s) && (s == "0" || !s.hasPrefix("0"))
     }
 
     private static func isIdentifier(_ s: String) -> Bool {
         guard !s.isEmpty, s.allSatisfy({ $0.isASCIIDigit || $0 == "-" || ($0.isASCII && $0.isLetter) }) else { return false }
-        return s.contains { !$0.isASCIIDigit } || isNumeric(s)
+        return !isDigits(s) || isNumeric(s)
     }
+
+    private static func isDigits(_ s: String) -> Bool { s.allSatisfy(\.isASCIIDigit) }
 
     public var description: String {
         let core = "\(major).\(minor).\(patch)"
@@ -53,11 +55,11 @@ public struct SemanticVersion: Comparable, Hashable, CustomStringConvertible, Se
         case (false, false): break
         }
         for (l, r) in zip(lhs.prerelease, rhs.prerelease) where l != r {
-            switch (Int(l), Int(r)) {
-            case let (li?, ri?): return li < ri
-            case (.some, .none): return true
-            case (.none, .some): return false
-            default: return l < r
+            switch (isDigits(l), isDigits(r)) {
+            case (true, true): return l.count != r.count ? l.count < r.count : l < r
+            case (true, false): return true
+            case (false, true): return false
+            case (false, false): return l < r
             }
         }
         return lhs.prerelease.count < rhs.prerelease.count
