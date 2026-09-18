@@ -14,24 +14,27 @@ struct MenuBarView: View {
         VStack(spacing: 0) {
             header
             Divider().overlay(Theme.line)
-            if let error = store.error, store.cube.isEmpty {
-                errorState(error)
-            } else {
-                VStack(spacing: 12) {
-                    kpis
-                    burnBar
-                    sparkline
-                    topLists
-                    recentSessions
-                    quality
+            ScrollView(.vertical) {
+                if let error = store.error, store.cube.isEmpty {
+                    errorState(error)
+                } else {
+                    VStack(spacing: 12) {
+                        kpis
+                        burnBar
+                        sparkline
+                        topLists
+                        recentSessions
+                        quality
+                    }
+                    .padding(14)
                 }
-                .padding(14)
             }
+            .scrollIndicators(.never)
+            .frame(maxHeight: .infinity, alignment: .top)
             Divider().overlay(Theme.line)
             footer
         }
-        .frame(width: 360)
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(width: 360, height: 720)
         .background(Theme.bg)
         .foregroundStyle(Theme.text)
         .preferredColorScheme(.dark)
