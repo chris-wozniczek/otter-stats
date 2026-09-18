@@ -18,6 +18,24 @@ public struct PriceSnapshot: Sendable {
 
     public static let empty = PriceSnapshot()
 
+    /// A paid model whose listed rate free-tier usage is compared against.
+    /// All SWE models are billed at the same rate, so SWE-1.7 is the reference;
+    /// any other paid SWE model is the fallback. Nil means no comparison is possible.
+    public var referenceRate: (model: String, price: ModelPrice)? {
+        let paidSWE = prices.filter { $0.key.lowercased().hasPrefix("swe-") && !$0.value.free }
+        let ranked = paidSWE.sorted { a, b in
+            let pa = Self.isSWE17(a.key), pb = Self.isSWE17(b.key)
+            if pa != pb { return pa }
+            return a.key < b.key
+        }
+        return ranked.first.map { (model: $0.key, price: $0.value) }
+    }
+
+    private static func isSWE17(_ id: String) -> Bool {
+        let s = id.lowercased()
+        return s.hasPrefix("swe-1.7") || s.hasPrefix("swe-1-7") || s.hasPrefix("swe-17")
+    }
+
     /// Tolerant read: a missing or corrupt file is an empty snapshot.
     public static func read(from url: URL = DevinPaths.defaultPrices) -> PriceSnapshot {
         guard let data = try? Data(contentsOf: url),

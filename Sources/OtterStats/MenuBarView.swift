@@ -63,13 +63,18 @@ struct MenuBarView: View {
     private var kpis: some View {
         let t = slice.totals
         return LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-            KPI(label: "Est. cost", value: Fmt.usd(t.costUSD, complete: t.costComplete),
-                sub: t.costComplete ? "\(t.pricedTurns) priced turns" : "\(t.unpricedTurns) unpriced turns", accent: Theme.amber)
+            KPI(label: "Actual est. cost", value: Fmt.usd(t.costUSD, complete: t.costComplete), sub: costSub(t), accent: Theme.amber)
             KPI(label: "Tokens", value: Fmt.compact(t.tokens),
                 sub: "in \(Fmt.compact(t.input)) · out \(Fmt.compact(t.output))\ncache \(Fmt.compact(t.cacheRead))", accent: Theme.cyan)
             KPI(label: "Turns", value: Fmt.int(t.turns), sub: "\(Fmt.int(slice.prompts)) prompts", accent: Theme.teal)
             KPI(label: "Model time", value: Fmt.duration(ms: t.modelMs), sub: "\(slice.sessionsWithTurns) sessions", accent: Theme.violet)
         }
+    }
+
+    private func costSub(_ t: UsageTotals) -> String {
+        if t.equivalentUSD > 0 { return "≈\(Fmt.usd(t.billedEquivalentUSD)) if free tier\nwere billed (\(store.cube.referenceModel ?? "SWE") rates)" }
+        if t.hasFree { return "free-tier usage counted as $0" }
+        return t.costComplete ? "\(t.pricedTurns) priced turns" : "\(t.unpricedTurns) unpriced turns"
     }
 
     @ViewBuilder private var burnBar: some View {

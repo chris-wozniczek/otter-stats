@@ -204,11 +204,17 @@ final class UsageStore: ObservableObject {
     func toggleModel(_ i: Int) { toggle(&filter.models, i) }
     func toggleProject(_ i: Int) { toggle(&filter.projects, i) }
     func toggleSession(_ i: Int) { toggle(&filter.sessions, i) }
+    /// Nil selects every pricing class.
+    func setPricing(_ p: PricingClass?) { filter.pricing = p.map { [$0] } ?? [] }
+    var pricingSelection: PricingClass? { filter.pricing.count == 1 ? filter.pricing.first : nil }
     func clearSlicers() {
         var f = filter
-        f.agents = []; f.buckets = []; f.models = []; f.projects = []; f.sessions = []; f.query = ""
+        f.clearSlicers()
         filter = f
     }
+
+    /// Wording for the counterfactual cost, or nil when the snapshot has no paid SWE model to compare against.
+    var equivalentBasis: String? { cube.referenceModel.map { "if billed at \($0) rates" } }
 
     private func toggle<T: Hashable>(_ set: inout Set<T>, _ v: T) {
         if set.contains(v) { set.remove(v) } else { set.insert(v) }
@@ -222,6 +228,7 @@ final class UsageStore: ObservableObject {
             chips.append((label, { self.toggleAgent(a) }))
         }
         for m in filter.models.sorted() where m < cube.models.count { chips.append((cube.models[m].id, { self.toggleModel(m) })) }
+        for p in filter.pricing.sorted(by: { $0.rawValue < $1.rawValue }) { chips.append(("\(p.label) models", { self.filter.pricing.remove(p) })) }
         for p in filter.projects.sorted() where p < cube.projects.count { chips.append((cube.projects[p].name, { self.toggleProject(p) })) }
         for s in filter.sessions.sorted() where s < cube.sessions.count {
             let t = cube.sessions[s].title

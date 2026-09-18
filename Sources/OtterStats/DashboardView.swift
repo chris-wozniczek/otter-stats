@@ -45,6 +45,7 @@ struct DashboardView: View {
         } detail: {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    pricingBar
                     if !store.activeChips.isEmpty { slicerBar }
                     if let error = store.error {
                         Label(error, systemImage: "exclamationmark.triangle.fill")
@@ -126,6 +127,28 @@ struct DashboardView: View {
         }
     }
 
+    private var pricingBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "dollarsign.circle").foregroundStyle(Theme.amber)
+            Text("Pricing").foregroundStyle(Theme.muted)
+            Picker("Pricing", selection: Binding(get: { store.pricingSelection }, set: { store.setPricing($0) })) {
+                Text("All").tag(PricingClass?.none)
+                ForEach(PricingClass.allCases) { p in Text(p.label).tag(PricingClass?.some(p)) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            Spacer()
+            Text(store.equivalentBasis.map { "Equivalent paid cost \($0) · simulation, not a Devin charge" }
+                 ?? "Equivalent paid cost unavailable · no paid SWE model in the price snapshot")
+                .font(.caption).foregroundStyle(Theme.muted).lineLimit(1)
+        }
+        .font(.callout)
+        .controlSize(.small)
+        .padding(10)
+        .background(Theme.glass, in: RoundedRectangle(cornerRadius: 10))
+    }
+
     private var slicerBar: some View {
         HStack(spacing: 6) {
             Text("Filters").font(.caption).foregroundStyle(Theme.muted)
@@ -163,12 +186,12 @@ struct OverviewSection: View {
         let t = slice.totals
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 6), spacing: 10) {
             KPI(label: "Turns", value: Fmt.int(t.turns), sub: "\(Fmt.int(slice.prompts)) prompts", accent: Theme.teal)
-            KPI(label: "Tokens", value: Fmt.compact(t.tokens), sub: "in+out+cache read", accent: Theme.cyan)
+            KPI(label: "Tokens", value: Fmt.compact(t.tokens), sub: tokenSplit(t), accent: Theme.cyan)
+            KPI(label: "Actual est. cost", value: Fmt.usd(t.costUSD, complete: t.costComplete),
+                sub: t.costComplete ? (t.hasFree ? "paid models only · free tier = $0" : "all turns priced") : "\(t.unpricedTurns) turns with unknown pricing", accent: Theme.amber)
+            KPI(label: "Equivalent paid cost", value: equivalentValue(t), sub: equivalentSub(t), accent: Theme.ok)
             KPI(label: "Model time", value: Fmt.duration(ms: t.modelMs), sub: "avg \(Fmt.duration(ms: Int(t.avgTurnMs)))/turn", accent: Theme.violet)
-            KPI(label: "Est. cost", value: Fmt.usd(t.costUSD, complete: t.costComplete),
-                sub: t.costComplete ? "all turns priced" : "\(t.unpricedTurns) unpriced", accent: Theme.amber)
-            KPI(label: "Sessions", value: "\(slice.sessionsWithTurns)", sub: "\(slice.activeSessions) active in period", accent: Theme.ok)
-            KPI(label: "Cache hit", value: Fmt.percent(t.cacheHitRatio), sub: "\(Fmt.compact(t.cacheRead)) cached", accent: Theme.pink)
+            KPI(label: "Sessions", value: "\(slice.sessionsWithTurns)", sub: "\(slice.activeSessions) active · cache hit \(Fmt.percent(t.cacheHitRatio))", accent: Theme.pink)
         }
         HStack(alignment: .top, spacing: 16) {
             Panel(title: "Who burned it", subtitle: "share of tokens by bucket") {
@@ -195,13 +218,34 @@ struct OverviewSection: View {
             }
             Panel(title: "Top models") {
                 ForEach(Array(slice.byModel.prefix(6).enumerated()), id: \.element.key) { i, k in
-                    RowBar(label: slice.model(k.key).id, value: Fmt.compact(k.totals.tokens), share: k.share, color: Theme.series(i),
-                           detail: Fmt.usd(k.totals.costUSD, complete: k.totals.costComplete),
+                    let m = slice.model(k.key)
+                    RowBar(label: "\(m.id)  ·  \(m.pricing.badge.lowercased())", value: Fmt.compact(k.totals.tokens), share: k.share, color: Theme.series(i),
+                           detail: CostText.actualAndEquivalent(k.totals),
                            selected: store.filter.models.contains(k.key)) { store.toggleModel(k.key) }
                 }
                 if slice.byModel.isEmpty { EmptyHint() }
             }
         }
+    }
+
+    private func tokenSplit(_ t: UsageTotals) -> String {
+        var parts: [String] = []
+        if t.paidTokens > 0 { parts.append("\(Fmt.compact(t.paidTokens)) paid") }
+        if t.freeTokens > 0 { parts.append("\(Fmt.compact(t.freeTokens)) free") }
+        if t.unknownTokens > 0 { parts.append("\(Fmt.compact(t.unknownTokens)) unknown") }
+        return parts.isEmpty ? "in+out+cache read" : parts.joined(separator: " · ")
+    }
+
+    private func equivalentValue(_ t: UsageTotals) -> String {
+        guard t.hasFree else { return "—" }
+        guard store.equivalentBasis != nil else { return "n/a" }
+        return Fmt.usd(t.billedEquivalentUSD, complete: t.costComplete)
+    }
+
+    private func equivalentSub(_ t: UsageTotals) -> String {
+        guard t.hasFree else { return "no free-tier usage in period" }
+        guard let basis = store.equivalentBasis else { return "no paid SWE model in price snapshot" }
+        return "+\(Fmt.usd(t.equivalentUSD)) for \(Fmt.compact(t.freeTokens)) free tokens \(basis) · simulation"
     }
 }
 
@@ -279,22 +323,26 @@ struct ModelsSection: View {
                 }
             }
             .frame(maxWidth: 360)
-            Panel(title: "Cost by model", subtitle: "estimated from the local price snapshot") {
+            Panel(title: "Cost by model", subtitle: "solid = actual estimated cost · faded green = equivalent if free tier were billed (simulation)") {
                 Chart(Array(slice.byModel.enumerated()), id: \.element.key) { i, k in
                     BarMark(x: .value("USD", k.totals.costUSD), y: .value("Model", slice.model(k.key).id))
                         .foregroundStyle(Theme.series(i)).cornerRadius(3)
+                    if k.totals.equivalentUSD > 0 {
+                        BarMark(x: .value("USD", k.totals.equivalentUSD), y: .value("Model", slice.model(k.key).id))
+                            .foregroundStyle(Theme.ok.opacity(0.35)).cornerRadius(3)
+                    }
                 }
                 .chartXAxis { AxisMarks { v in AxisValueLabel { if let n = v.as(Double.self) { Text(Fmt.usd(n)) } }; AxisGridLine().foregroundStyle(Theme.line) } }
                 .frame(height: max(160, CGFloat(slice.byModel.count) * 26))
             }
         }
-        Panel(title: "All models") {
+        Panel(title: "All models", subtitle: store.equivalentBasis.map { "equivalent = \($0) · simulation, not a charge" } ?? "equivalent cost unavailable: no paid SWE model in the price snapshot") {
             UsageTable(rows: slice.byModel.enumerated().map { i, k in
                 let m = slice.model(k.key)
-                let price = m.price.map { p in p.free ? "free tier" : "$\(Fmt.trim(p.input * 1e6)) in · $\(Fmt.trim(p.output * 1e6)) out /1M" } ?? "unpriced"
-                return UsageTableRow(id: m.id, label: m.id, sub: price, color: Theme.series(i), totals: k.totals, share: k.share,
+                let price = m.price.map { p in p.free ? "free tier · actual $0" : "$\(Fmt.trim(p.input * 1e6)) in · $\(Fmt.trim(p.output * 1e6)) out /1M" } ?? "run devin models list to price"
+                return UsageTableRow(id: m.id, label: m.id, sub: price, tag: m.pricing, color: Theme.series(i), totals: k.totals, share: k.share,
                                      selected: store.filter.models.contains(k.key)) { store.toggleModel(k.key) }
-            })
+            }, showEquivalent: true)
         }
     }
 }
@@ -559,6 +607,7 @@ struct UsageTableRow: Identifiable {
     let id: String
     let label: String
     let sub: String
+    var tag: PricingClass? = nil
     let color: Color
     let totals: UsageTotals
     let share: Double
@@ -568,12 +617,14 @@ struct UsageTableRow: Identifiable {
 
 struct UsageTable: View {
     let rows: [UsageTableRow]
+    var showEquivalent = false
 
     var body: some View {
         Grid(alignment: .trailing, horizontalSpacing: 16, verticalSpacing: 4) {
             GridRow {
                 Text("Name").gridColumnAlignment(.leading)
-                Text("Share"); Text("Turns"); Text("Input"); Text("Output"); Text("Cache"); Text("Model time"); Text("Est. cost")
+                Text("Share"); Text("Turns"); Text("Input"); Text("Output"); Text("Cache"); Text("Model time"); Text("Actual cost")
+                if showEquivalent { Text("Equivalent") }
             }
             .font(.caption.weight(.semibold)).foregroundStyle(Theme.muted)
             ForEach(rows) { r in
@@ -582,7 +633,10 @@ struct UsageTable: View {
                         HStack(spacing: 8) {
                             RoundedRectangle(cornerRadius: 2).fill(r.color).frame(width: 4, height: 24)
                             VStack(alignment: .leading, spacing: 0) {
-                                Text(r.label).font(.callout).lineLimit(1)
+                                HStack(spacing: 6) {
+                                    Text(r.label).font(.callout).lineLimit(1)
+                                    if let tag = r.tag { Tag(text: tag.badge, color: tag.color) }
+                                }
                                 Text(r.sub).font(.caption2).foregroundStyle(Theme.muted).lineLimit(1)
                             }
                             if r.selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.cyan).font(.caption) }
@@ -594,6 +648,9 @@ struct UsageTable: View {
                     Text(Fmt.percent(r.share)); Text(Fmt.int(r.totals.turns)); Text(Fmt.compact(r.totals.input))
                     Text(Fmt.compact(r.totals.output)); Text(Fmt.compact(r.totals.cacheRead))
                     Text(Fmt.duration(ms: r.totals.modelMs)); Text(Fmt.usd(r.totals.costUSD, complete: r.totals.costComplete))
+                    if showEquivalent {
+                        Text(r.totals.equivalentUSD > 0 ? "≈" + Fmt.usd(r.totals.equivalentUSD) : "—").foregroundStyle(Theme.ok)
+                    }
                 }
                 .font(.callout.monospacedDigit())
                 .padding(.vertical, 2)

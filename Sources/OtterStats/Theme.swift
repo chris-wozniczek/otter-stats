@@ -141,6 +141,48 @@ struct Chip: View {
     }
 }
 
+extension PricingClass {
+    var color: Color {
+        switch self {
+        case .paid: return Theme.amber
+        case .free: return Theme.ok
+        case .unknown: return Theme.muted
+        }
+    }
+
+    var badge: String {
+        switch self {
+        case .paid: return "PAID"
+        case .free: return "FREE TIER"
+        case .unknown: return "PRICE UNKNOWN"
+        }
+    }
+}
+
+/// Small uppercase tag, e.g. `FREE TIER`.
+struct Tag: View {
+    let text: String
+    var color: Color = Theme.muted
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 9, weight: .semibold))
+            .tracking(0.6)
+            .foregroundStyle(color)
+            .padding(.horizontal, 5).padding(.vertical, 2)
+            .background(color.opacity(0.14), in: Capsule())
+    }
+}
+
+enum CostText {
+    /// "$12.30" or "$0 · ≈$4.10 if billed" for free-tier heavy rows.
+    static func actualAndEquivalent(_ t: UsageTotals) -> String {
+        let actual = Fmt.usd(t.costUSD, complete: t.costComplete)
+        guard t.equivalentUSD > 0 else { return actual }
+        return "\(actual) · ≈\(Fmt.usd(t.equivalentUSD)) if billed"
+    }
+}
+
 struct PillToggle: View {
     @Binding var selection: String
     let options: [(String, String)]
