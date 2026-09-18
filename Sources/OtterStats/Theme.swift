@@ -91,7 +91,7 @@ struct KPI: View {
                 .tracking(0.8)
                 .foregroundStyle(accent)
             if let sub {
-                Text(sub).font(.caption2).foregroundStyle(Theme.muted).lineLimit(1)
+                Text(sub).font(.caption2).foregroundStyle(Theme.muted).lineLimit(2).fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

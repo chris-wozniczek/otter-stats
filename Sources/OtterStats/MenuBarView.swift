@@ -58,7 +58,7 @@ struct MenuBarView: View {
             KPI(label: "Est. cost", value: Fmt.usd(t.costUSD, complete: t.costComplete),
                 sub: t.costComplete ? "\(t.pricedTurns) priced turns" : "\(t.unpricedTurns) unpriced turns", accent: Theme.amber)
             KPI(label: "Tokens", value: Fmt.compact(t.tokens),
-                sub: "in \(Fmt.compact(t.input)) · out \(Fmt.compact(t.output)) · cached \(Fmt.compact(t.cacheRead))", accent: Theme.cyan)
+                sub: "in \(Fmt.compact(t.input)) · out \(Fmt.compact(t.output))\ncache \(Fmt.compact(t.cacheRead))", accent: Theme.cyan)
             KPI(label: "Turns", value: Fmt.int(t.turns), sub: "\(Fmt.int(slice.prompts)) prompts", accent: Theme.teal)
             KPI(label: "Model time", value: Fmt.duration(ms: t.modelMs), sub: "\(slice.sessionsWithTurns) sessions", accent: Theme.violet)
         }
