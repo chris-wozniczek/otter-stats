@@ -38,10 +38,27 @@ truncation) is surfaced instead of hidden.
 
 Requirements: macOS 14 (Sonoma) or newer. Devin CLI or Devin Desktop for real data.
 
-Download `OtterStats.zip` from the latest release, unzip, drag
-`OtterStats.app` to `/Applications`, open it. The otter appears in your menu bar.
+### Homebrew (recommended)
 
-Or build it yourself:
+```sh
+brew install --cask chris-wozniczek/tap/otter-stats
+open -a "Otter Stats"
+```
+
+Upgrade with `brew upgrade --cask otter-stats`; remove with
+`brew uninstall --cask otter-stats` (`--zap` also deletes settings and demo data).
+
+### Manual download
+
+Download `OtterStats.zip` from the
+[latest release](https://github.com/chris-wozniczek/otter-stats/releases/latest),
+unzip, drag `OtterStats.app` to `/Applications`, open it. The otter appears in
+your menu bar. The app is ad-hoc signed (no Apple Developer ID yet), so on first
+launch macOS may ask you to confirm: right-click the app → **Open**, or allow it
+under **System Settings → Privacy & Security**. The Homebrew cask clears the
+quarantine flag for you.
+
+### Build from source
 
 ```sh
 git clone https://github.com/chris-wozniczek/otter-stats.git
@@ -51,6 +68,32 @@ open dist/OtterStats.app
 ```
 
 Set `CODESIGN_ID="Developer ID Application: …"` to sign with your own identity.
+
+### First run
+
+Otter Stats lives only in the menu bar (no Dock icon). It reads
+`~/.local/share/devin/cli/sessions.db` read-only, so if you already use Devin
+CLI or Devin Desktop your usage appears immediately. No Devin data yet? Click
+**Try demo data**. For cost estimates it needs a price snapshot: **Settings →
+Refresh prices** runs `devin models list` once, or it reuses the one Otter
+Swarm writes.
+
+## Releasing
+
+Push a tag and CI does the rest:
+
+```sh
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+`.github/workflows/release.yml` builds the universal `OtterStats.zip`, publishes
+a GitHub Release, and — when a `TAP_GITHUB_TOKEN` repository secret (a token
+with push access to `chris-wozniczek/homebrew-tap`) is configured — updates the
+cask in the tap. Without the secret, bump it by hand:
+
+```sh
+Scripts/bump-cask.sh 0.2.0 "$(shasum -a 256 dist/OtterStats.zip | cut -d' ' -f1)"
+```
 
 ## Data sources
 
