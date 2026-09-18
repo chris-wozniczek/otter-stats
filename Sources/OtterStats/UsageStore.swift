@@ -39,7 +39,7 @@ final class UsageStore: ObservableObject {
     @Published private(set) var slice: UsageSlice = UsageSlice(cube: .empty, filter: UsageFilter())
     @Published private(set) var todaySlice: UsageSlice = UsageSlice(cube: .empty, filter: UsageFilter(period: .today))
     @Published private(set) var weekSlice: UsageSlice = UsageSlice(cube: .empty, filter: UsageFilter(period: .week))
-    @Published private(set) var fortnightSlice: UsageSlice = UsageSlice(cube: .empty, filter: Self.fortnightFilter())
+    @Published private(set) var fortnightSlice: UsageSlice = UsageSlice(cube: .empty, filter: UsageStore.fortnightFilter())
 
     @AppStorage(SettingsKeys.dbPath) var dbPathOverride: String = ""
     @AppStorage(SettingsKeys.pricesPath) var pricesPathOverride: String = ""
@@ -168,7 +168,7 @@ final class UsageStore: ObservableObject {
         slice = UsageSlice(cube: cube, filter: filter)
         todaySlice = UsageSlice(cube: cube, filter: UsageFilter(period: .today))
         weekSlice = UsageSlice(cube: cube, filter: UsageFilter(period: .week))
-        fortnightSlice = UsageSlice(cube: cube, filter: Self.fortnightFilter())
+        fortnightSlice = UsageSlice(cube: cube, filter: UsageStore.fortnightFilter())
     }
 
     private func watchFile() {
